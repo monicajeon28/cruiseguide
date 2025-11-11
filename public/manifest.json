@@ -1,0 +1,7 @@
+{
+  "name": "Cruise Guide",
+  "short_name": "CruiseGuide",
+  "start_url": "/",
+  "display": "standalone",
+  "icons": []
+}

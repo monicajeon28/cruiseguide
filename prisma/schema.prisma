@@ -1,0 +1,1504 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model AdminActionLog {
+  id           Int      @id @default(autoincrement())
+  adminId      Int
+  targetUserId Int?
+  action       String
+  details      Json?
+  createdAt    DateTime @default(now())
+  User         User     @relation(fields: [adminId], references: [id])
+
+  @@index([targetUserId, createdAt])
+  @@index([adminId, createdAt])
+}
+
+model AdminMessage {
+  id                              Int               @id @default(autoincrement())
+  adminId                         Int
+  userId                          Int?
+  title                           String
+  content                         String
+  messageType                     String            @default("info")
+  isActive                        Boolean           @default(true)
+  sendAt                          DateTime?
+  readCount                       Int               @default(0)
+  totalSent                       Int               @default(0)
+  metadata                        Json?
+  createdAt                       DateTime          @default(now())
+  updatedAt                       DateTime
+  User_AdminMessage_userIdToUser  User?             @relation("AdminMessage_userIdToUser", fields: [userId], references: [id])
+  User_AdminMessage_adminIdToUser User              @relation("AdminMessage_adminIdToUser", fields: [adminId], references: [id])
+  UserMessageRead                 UserMessageRead[]
+
+  @@index([adminId, createdAt])
+  @@index([userId, isActive, createdAt])
+}
+
+// 예약 메시지 (예약메시지 카테고리)
+model ScheduledMessage {
+  id             Int                     @id @default(autoincrement())
+  adminId        Int
+  title          String // 메시지 제목
+  category       String                  @default("예약메시지") // 카테고리
+  groupName      String? // 퍼널문자 묶음명
+  description    String? // 메시지 설명
+  sendMethod     String // 'email', 'sms', 'kakao', 'cruise-guide'
+  senderName     String? // 발신자 업체명/서비스명
+  senderPhone    String? // 발신번호 (SMS용)
+  senderEmail    String? // 발신 이메일 (Email용)
+  optOutNumber   String? // 무료수신거부 번호 (080-XXX-XXXX)
+  isAdMessage    Boolean                 @default(false) // 광고성 메시지 여부
+  autoAddAdTag   Boolean                 @default(true) // (광고) 자동 추가
+  autoAddOptOut  Boolean                 @default(true) // 무료거부 자동 추가
+  startDate      DateTime? // 시작 날짜 (N일 후 발송 시작)
+  startTime      String? // 시작 시간 (HH:mm 형식)
+  maxDays        Int                     @default(99999) // 최대 예약 일수 (이메일/카톡: 99999, SMS: 999999)
+  repeatInterval Int? // 반복 간격 (일 단위, null이면 1회만)
+  isActive       Boolean                 @default(true)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  User           User                    @relation(fields: [adminId], references: [id])
+  Stages         ScheduledMessageStage[] // 메시지 단계들
+
+  @@index([adminId, createdAt])
+  @@index([category, isActive])
+  @@index([startDate, isActive])
+}
+
+// 예약 메시지 단계 (반복 발송용)
+model ScheduledMessageStage {
+  id                 Int              @id @default(autoincrement())
+  scheduledMessageId Int
+  stageNumber        Int // 단계 번호 (1회차, 2회차...)
+  daysAfter          Int              @default(0) // 시작점으로부터 며칠 후
+  sendTime           String? // 발송 시간 (HH:mm 형식)
+  title              String // 단계별 제목
+  content            String // 단계별 내용
+  order              Int              @default(0)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  ScheduledMessage   ScheduledMessage @relation(fields: [scheduledMessageId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledMessageId, order])
+  @@index([scheduledMessageId, stageNumber])
+}
+
+model ChatHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tripId    Int?
+  sessionId String
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  Trip      Trip?    @relation(fields: [tripId], references: [id])
+  User      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, tripId, createdAt])
+}
+
+model ChecklistItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tripId    Int?
+  text      String
+  completed Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  Trip      Trip?    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([order])
+  @@index([userId, tripId])
+}
+
+model CmsNotificationTemplate {
+  id          Int      @id @default(autoincrement())
+  triggerCode String   @unique
+  title       String
+  message     String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  @@index([triggerCode, isActive])
+}
+
+model CruiseProduct {
+  id                 Int                 @id @default(autoincrement())
+  productCode        String              @unique
+  cruiseLine         String
+  shipName           String
+  packageName        String
+  nights             Int
+  days               Int
+  itineraryPattern   Json
+  basePrice          Int?
+  description        String?
+  source             String? // API 출처: 'cruisedot', 'wcruise', 'manual' 등
+  category           String? // 카테고리: '주말크루즈', '동남아', '홍콩' 등
+  tags               Json? // 태그 배열: ['주말크루즈', '100만원할인', '커플추천'] 등 (최대 3개)
+  // recommendedKeywords 필드는 데이터베이스에 없으므로 제거됨
+  isPopular          Boolean             @default(false) // 인기 크루즈
+  isRecommended      Boolean             @default(false) // 추천 크루즈
+  isPremium          Boolean             @default(false) // 프리미엄 크루즈
+  isGeniePack        Boolean             @default(false) // 지니 패키지 크루즈
+  isDomestic         Boolean             @default(false) // 국내 출발 크루즈
+  isJapan            Boolean             @default(false) // 일본 크루즈
+  isBudget           Boolean             @default(false) // 알뜰 크루즈
+  isUrgent           Boolean             @default(false) // 긴급 상품 (메인몰 최상단 고정, 최대 3개)
+  isMainProduct      Boolean             @default(false) // 주력 상품 (메인몰 두 번째 고정, 최대 3개)
+  saleStatus         String              @default("판매중") // 판매 상태: '판매중', '판매완료', '판매중지'
+  startDate          DateTime? // 여행 시작일 (선택사항)
+  endDate            DateTime? // 여행 종료일 (선택사항)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  Trip               Trip[]
+  MallProductContent MallProductContent?
+  ProductInquiries   ProductInquiry[]
+  ProductViews       ProductView[]
+  affiliateProducts  AffiliateProduct[]
+
+  @@index([productCode])
+  @@index([source])
+  @@index([isPopular])
+  @@index([isRecommended])
+  @@index([isPremium])
+  @@index([isGeniePack])
+  @@index([isDomestic])
+  @@index([isJapan])
+  @@index([isBudget])
+  @@index([isUrgent])
+  @@index([isMainProduct])
+  @@index([category])
+  @@index([saleStatus])
+}
+
+// 상품 문의
+model ProductInquiry {
+  id             Int           @id @default(autoincrement())
+  productCode    String
+  userId         Int?
+  name           String
+  phone          String
+  passportNumber String?
+  message        String?
+  status         String        @default("pending") // 'pending', 'contacted', 'completed', 'cancelled'
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  Product        CruiseProduct @relation(fields: [productCode], references: [productCode], onDelete: Cascade)
+  User           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([productCode])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 상품 조회 내역
+model ProductView {
+  id          Int           @id @default(autoincrement())
+  productCode String
+  userId      Int?
+  viewedAt    DateTime      @default(now())
+  Product     CruiseProduct @relation(fields: [productCode], references: [productCode], onDelete: Cascade)
+  User        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([productCode, viewedAt])
+  @@index([userId, viewedAt])
+  @@index([viewedAt])
+}
+
+// 여행일정 그룹 (재사용 가능한 일정 템플릿)
+model ItineraryGroup {
+  id          Int      @id @default(autoincrement())
+  name        String // 그룹 이름
+  description String? // 설명
+  itinerary   Json // 일정 데이터 (Day별 블록 배열)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
+// 환불/취소 규정 그룹 (재사용 가능한 규정 템플릿)
+model RefundPolicyGroup {
+  id          Int      @id @default(autoincrement())
+  name        String // 그룹 이름
+  description String? // 설명
+  content     String // 규정 내용
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Expense {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  tripId        Int?
+  description   String
+  category      String
+  foreignAmount Float
+  krwAmount     Float
+  usdAmount     Float
+  currency      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime
+  Trip          Trip?    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([userId, tripId])
+}
+
+model FeatureUsage {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  feature    String
+  usageCount Int      @default(1)
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime
+  User       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, feature])
+  @@index([userId, lastUsedAt])
+  @@index([lastUsedAt])
+  @@index([feature, usageCount])
+}
+
+model Itinerary {
+  id          Int       @id @default(autoincrement())
+  tripId      Int
+  day         Int
+  date        DateTime
+  type        String
+  location    String?
+  country     String?
+  currency    String?
+  language    String?
+  arrival     String?
+  departure   String?
+  time        String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime
+  allAboardAt DateTime?
+  arrivalAt   DateTime?
+  portLat     Float?
+  portLng     Float?
+  Trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@index([tripId, day])
+}
+
+model KnowledgeBase {
+  id        Int      @id @default(autoincrement())
+  category  String
+  question  String?
+  title     String
+  content   String
+  keywords  String
+  metadata  Json?
+  language  String   @default("ko")
+  priority  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+
+  @@index([keywords])
+  @@index([category, isActive])
+}
+
+model LoginLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  kind      String
+  message   String?
+  meta      Json?
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MapTravelRecord {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  cruiseName  String
+  companion   String
+  destination String
+  startDate   DateTime
+  endDate     DateTime
+  impressions String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([startDate])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+model MarketingInsight {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  insightType String
+  data        Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  User        User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, insightType])
+  @@index([userId, insightType])
+}
+
+model NotificationLog {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  tripId           Int?
+  itineraryId      Int?
+  notificationType String
+  eventKey         String   @unique
+  title            String
+  body             String
+  sentAt           DateTime @default(now())
+
+  @@index([sentAt])
+  @@index([userId, tripId])
+}
+
+model PasswordEvent {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  from      String
+  to        String
+  reason    String
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  endpoint  String   @unique
+  keys      Json
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RePurchaseTrigger {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  lastTripEndDate DateTime
+  triggerType     String
+  messageSent     Boolean   @default(false)
+  converted       Boolean   @default(false)
+  convertedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime
+  User            User      @relation(fields: [userId], references: [id])
+
+  @@index([converted, createdAt])
+  @@index([userId, lastTripEndDate])
+}
+
+model Session {
+  id        String    @id
+  userId    Int
+  createdAt DateTime  @default(now())
+  csrfToken String?
+  expiresAt DateTime?
+  User      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model TravelDiaryEntry {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  tripId      Int?
+  countryCode String
+  countryName String
+  title       String
+  content     String
+  visitDate   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  Trip        Trip?    @relation(fields: [tripId], references: [id])
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([visitDate])
+  @@index([userId, countryCode])
+  @@index([userId, tripId])
+}
+
+model Trip {
+  id                  Int                  @id @default(autoincrement())
+  userId              Int
+  productId           Int?
+  reservationCode     String?
+  cruiseName          String?
+  companionType       String?
+  destination         Json?
+  startDate           DateTime?
+  endDate             DateTime?
+  nights              Int                  @default(0)
+  days                Int                  @default(0)
+  visitCount          Int                  @default(0)
+  status              String               @default("Upcoming")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime
+  ChatHistory         ChatHistory[]
+  ChecklistItem       ChecklistItem[]
+  Expense             Expense[]
+  Itinerary           Itinerary[]
+  TravelDiaryEntry    TravelDiaryEntry[]
+  CruiseProduct       CruiseProduct?       @relation(fields: [productId], references: [id])
+  User                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  TripFeedback        TripFeedback?
+  PassportSubmissions PassportSubmission[]
+
+  @@index([createdAt])
+  @@index([startDate])
+  @@index([userId, status])
+}
+
+model TripFeedback {
+  id                  Int      @id @default(autoincrement())
+  tripId              Int      @unique
+  userId              Int
+  satisfactionScore   Int?
+  improvementComments String?
+  detailedFeedback    Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime
+  Trip                Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model EmailAddressBook {
+  id        Int      @id @default(autoincrement())
+  adminId   Int
+  name      String?
+  email     String
+  phone     String?
+  memo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@unique([adminId, email])
+  @@index([adminId, createdAt])
+  @@index([email])
+}
+
+model User {
+  id                                      Int                       @id @default(autoincrement())
+  externalId                              String?                   @unique
+  name                                    String?
+  email                                   String?                   @unique
+  phone                                   String?
+  password                                String
+  onboarded                               Boolean                   @default(false)
+  loginCount                              Int                       @default(0)
+  tripCount                               Int                       @default(0)
+  totalTripCount                          Int                       @default(0)
+  currentTripEndDate                      DateTime?
+  role                                    String                    @default("user")
+  onboardingUpdatedAt                     DateTime?
+  onboardingUpdatedByUser                 Boolean                   @default(false)
+  lastActiveAt                            DateTime?
+  hibernatedAt                            DateTime?
+  isHibernated                            Boolean                   @default(false)
+  isLocked                                Boolean                   @default(false)
+  lockedAt                                DateTime?
+  lockedReason                            String?
+  customerStatus                          String? // 명시적 고객 상태: 'active', 'package', 'dormant', 'locked', 'test'
+  testModeStartedAt                       DateTime? // 테스트 모드 시작 시간 (72시간 카운트용)
+  customerSource                          String? // 고객 유입 경로: 'mall-signup', 'test-guide', 'admin', 'cruise-guide', 'mall-admin'
+  adminMemo                               String? // 관리자 메모
+  mallUserId                              String? // 크루즈몰 사용자 ID (연동용)
+  mallNickname                            String? // 크루즈몰 닉네임 (연동용)
+  genieStatus                             String? // 지니AI 사용 상태: 'active' (사용중), 'expired' (사용종료)
+  genieLinkedAt                           DateTime? // 지니AI 연동 일시
+  kakaoChannelAdded                       Boolean                   @default(false) // 카카오톡 채널 추가 여부
+  kakaoChannelAddedAt                     DateTime? // 카카오톡 채널 추가 일시
+  createdAt                               DateTime                  @default(now())
+  updatedAt                               DateTime                  @updatedAt
+  AdminActionLog                          AdminActionLog[]
+  AdminMessage_AdminMessage_userIdToUser  AdminMessage[]            @relation("AdminMessage_userIdToUser")
+  AdminMessage_AdminMessage_adminIdToUser AdminMessage[]            @relation("AdminMessage_adminIdToUser")
+  ScheduledMessage                        ScheduledMessage[] // 예약 메시지
+  EmailAddressBook                        EmailAddressBook[] // 이메일 주소록
+  ChatHistory                             ChatHistory[]
+  FeatureUsage                            FeatureUsage[]
+  LoginLog                                LoginLog[]
+  MapTravelRecord                         MapTravelRecord[]
+  MarketingInsight                        MarketingInsight[]
+  PasswordEvent                           PasswordEvent[]
+  PushSubscription                        PushSubscription[]
+  RePurchaseTrigger                       RePurchaseTrigger[]
+  Session                                 Session[]
+  TravelDiaryEntry                        TravelDiaryEntry[]
+  Trip                                    Trip[]
+  UserActivity                            UserActivity[]
+  UserMessageRead                         UserMessageRead[]
+  UserSchedule                            UserSchedule[]
+  VisitedCountry                          VisitedCountry[]
+  PassportRequestLogsReceived             PassportRequestLog[]      @relation("PassportRequestUser")
+  PassportRequestLogsSent                 PassportRequestLog[]      @relation("PassportRequestAdmin")
+  PassportRequestTemplatesUpdated         PassportRequestTemplate[] @relation("PassportRequestTemplate_updatedBy")
+  PassportSubmissions                     PassportSubmission[]
+  AffiliateProfile                        AffiliateProfile?
+  AffiliateDocumentsUploaded              AffiliateDocument[]       @relation("AffiliateDocumentUploadedBy")
+  AffiliateDocumentsApproved              AffiliateDocument[]       @relation("AffiliateDocumentApprovedBy")
+  AffiliateMediaUploads                   AffiliateMedia[]          @relation("AffiliateMediaUploadedBy")
+  AffiliateLinksIssued                    AffiliateLink[]           @relation("AffiliateLinkIssuedBy")
+  AffiliateLinkEvents                     AffiliateLinkEvent[]      @relation("AffiliateLinkEventActor")
+  AffiliateInteractionsCreated            AffiliateInteraction[]    @relation("AffiliateInteractionCreatedBy")
+  CommissionAdjustmentRequests            CommissionAdjustment[]    @relation("CommissionAdjustmentRequestedBy")
+  CommissionAdjustmentApprovals           CommissionAdjustment[]    @relation("CommissionAdjustmentApprovedBy")
+  SettlementEventsRecorded                SettlementEvent[]         @relation("SettlementEventActor")
+  MonthlySettlementApprovals              MonthlySettlement[]       @relation("MonthlySettlementApprovedBy")
+  CommunityPost                           CommunityPost[]
+  CommunityComment                        CommunityComment[]
+  CruiseReview                            CruiseReview[]
+  ProductInquiries                        ProductInquiry[]
+  ProductViews                            ProductView[]
+  ChatBotSessions                         ChatBotSession[]
+  AffiliateContractsApplied               AffiliateContract[]       @relation("AffiliateContractApplicant")
+  AffiliateContractsReviewed              AffiliateContract[]       @relation("AffiliateContractReviewer")
+
+  @@index([role])
+  @@index([lastActiveAt])
+  @@index([createdAt])
+  @@index([isHibernated, lastActiveAt])
+}
+
+// 메인몰 콘텐츠 관리
+model MallContent {
+  id        Int      @id @default(autoincrement())
+  section   String // 'hero', 'youtube', 'footer', 'product-list' 등
+  key       String // 콘텐츠 키 (고유 식별자)
+  type      String // 'text', 'image', 'video', 'button', 'font' 등
+  content   Json // 콘텐츠 데이터 (유연한 구조)
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([section, key])
+  @@index([section, isActive])
+  @@index([order])
+}
+
+// 상품별 상세페이지 콘텐츠
+model MallProductContent {
+  id          Int           @id @default(autoincrement())
+  productCode String        @unique
+  thumbnail   String? // 썸네일 이미지 URL
+  images      Json? // 이미지 배열 (URL 리스트)
+  videos      Json? // 영상 배열 (URL 리스트)
+  fonts       Json? // 폰트 설정 (폰트명, URL 등)
+  layout      Json? // 레이아웃 설정
+  customCss   String? // 커스텀 CSS
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  Product     CruiseProduct @relation(fields: [productCode], references: [productCode], onDelete: Cascade)
+
+  @@index([productCode, isActive])
+}
+
+// 커뮤니티 게시글
+model CommunityPost {
+  id         Int                @id @default(autoincrement())
+  userId     Int?
+  title      String
+  content    String
+  category   String             @default("general") // 'general', 'travel-tip', 'schedule', 'qna'
+  authorName String?
+  images     Json? // 이미지 배열
+  views      Int                @default(0)
+  likes      Int                @default(0)
+  comments   Int                @default(0)
+  isDeleted  Boolean            @default(false)
+  deletedAt  DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  User       User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  Comments   CommunityComment[]
+
+  @@index([category, isDeleted])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([isDeleted, createdAt])
+}
+
+model CommunityComment {
+  id              Int                @id @default(autoincrement())
+  postId          Int
+  userId          Int?
+  content         String
+  authorName      String?
+  parentCommentId Int? // 대댓글인 경우 부모 댓글 ID
+  ParentComment   CommunityComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  Replies         CommunityComment[] @relation("CommentReplies")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  Post            CommunityPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  User            User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId, createdAt])
+  @@index([userId])
+  @@index([parentCommentId])
+}
+
+// 크루즈 후기
+model CruiseReview {
+  id          Int       @id @default(autoincrement())
+  userId      Int?
+  productCode String? // 상품 코드 (선택적)
+  authorName  String // 작성자 이름 (익명 가능)
+  rating      Int // 별점 (1-5)
+  title       String? // 후기 제목 (선택적)
+  content     String // 후기 내용
+  images      Json? // 사진 배열 (URL 리스트)
+  cruiseLine  String? // 크루즈 라인
+  shipName    String? // 선박명
+  travelDate  DateTime? // 여행 날짜
+  isApproved  Boolean   @default(false) // 관리자 승인 여부 (일반 사용자는 승인 대기)
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  User        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([rating, isApproved, isDeleted])
+  @@index([productCode, isApproved, isDeleted])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model UserActivity {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String
+  page      String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id])
+
+  @@index([action, createdAt])
+  @@index([userId, createdAt])
+}
+
+model UserMessageRead {
+  id           Int          @id @default(autoincrement())
+  userId       Int
+  messageId    Int
+  readAt       DateTime     @default(now())
+  AdminMessage AdminMessage @relation(fields: [messageId], references: [id])
+  User         User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, messageId])
+  @@index([userId, readAt])
+}
+
+model UserSchedule {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  date      DateTime
+  time      String
+  title     String
+  alarm     Boolean  @default(false)
+  alarmTime String? // 알람 시간 (HH:MM 형식, alarm이 true일 때만 사용)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@index([userId, date])
+}
+
+model VisitedCountry {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  countryCode String
+  countryName String
+  visitCount  Int      @default(1)
+  lastVisited DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, countryCode])
+  @@index([userId])
+}
+
+// AI 지니 채팅봇 (구매) - SPIN 기반 상담 플로우
+model ChatBotFlow {
+  id              Int               @id @default(autoincrement())
+  name            String // 플로우 이름
+  category        String            @default("AI 지니 채팅봇(구매)") // 카테고리
+  description     String? // 설명
+  startQuestionId Int? // 시작 질문 ID
+  finalPageUrl    String? // 최종 구매 페이지 URL
+  isActive        Boolean           @default(true)
+  order           Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  questions       ChatBotQuestion[]
+  sessions        ChatBotSession[]
+
+  @@index([category, isActive])
+  @@index([order])
+}
+
+model ChatBotQuestion {
+  id              Int               @id @default(autoincrement())
+  flowId          Int
+  questionText    String // 질문 텍스트
+  questionType    String            @default("choice") // 'choice' (A/B 선택), 'info' (정보 제공), 'multi' (5가지 선택)
+  spinType        String? // 'S' (Situation), 'P' (Problem), 'I' (Implication), 'N' (Need-payoff)
+  information     String? // 제공할 정보 (markdown 지원)
+  optionA         String? // 선택지 A
+  optionB         String? // 선택지 B
+  options         Json? // 5가지 선택지 배열
+  nextQuestionIdA Int? // A 선택 시 다음 질문 ID
+  nextQuestionIdB Int? // B 선택 시 다음 질문 ID
+  nextQuestionIds Json? // 5가지 선택지에 대한 다음 질문 ID 배열
+  order           Int               @default(0)
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  flow            ChatBotFlow       @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  responses       ChatBotResponse[]
+
+  @@index([flowId, order])
+  @@index([nextQuestionIdA])
+  @@index([nextQuestionIdB])
+}
+
+// 채팅봇 세션 및 응답 추적 (타입봇 스타일)
+model ChatBotSession {
+  id             Int               @id @default(autoincrement())
+  sessionId      String            @unique // 고유 세션 ID
+  flowId         Int
+  userId         Int? // 로그인한 사용자 (선택적)
+  userPhone      String? // 비회원 전화번호
+  userEmail      String? // 비회원 이메일
+  productCode    String? // 연결된 상품 코드
+  startedAt      DateTime          @default(now())
+  completedAt    DateTime? // 완료 시간 (기존)
+  endedAt        DateTime? // 최종 종료 시각
+  durationMs     Int? // 전체 소요 시간 (밀리초)
+  isCompleted    Boolean           @default(false) // 최종 결제까지 완료 여부
+  finalStatus    String            @default("ONGOING") // 'ONGOING', 'COMPLETED', 'ABANDONED'
+  finalPageUrl   String? // 최종 도달한 페이지
+  paymentStatus  String? // 'PENDING', 'SUCCESS', 'FAILED'
+  paymentAttemptedAt DateTime?
+  paymentCompletedAt DateTime?
+  paymentOrderId String?
+  conversionRate Float? // 전환율 (0-1)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime
+  flow           ChatBotFlow       @relation(fields: [flowId], references: [id])
+  responses      ChatBotResponse[]
+  User           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([flowId, startedAt])
+  @@index([userId])
+  @@index([isCompleted])
+  @@index([finalStatus])
+  @@index([sessionId])
+  @@index([paymentStatus])
+}
+
+model ChatBotResponse {
+  id             Int             @id @default(autoincrement())
+  sessionId      String
+  questionId     Int
+  selectedOption String? // 'A' 또는 'B'
+  selectedText   String? // 선택한 텍스트
+  responseTime   Int? // 응답 시간 (밀리초)
+  isAbandoned    Boolean         @default(false) // 이 질문에서 이탈했는지
+  nextQuestionId Int? // 다음 질문 ID (실제로 이동한 질문)
+  questionOrder  Int?
+  optionLabel    String?
+  displayedAt    DateTime?
+  answeredAt     DateTime? @default(now())
+  createdAt      DateTime        @default(now())
+  session        ChatBotSession  @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  question       ChatBotQuestion @relation(fields: [questionId], references: [id])
+
+  @@index([sessionId, createdAt])
+  @@index([questionId])
+  @@index([questionOrder])
+  @@index([isAbandoned])
+}
+
+// 잠재고객 (이메일/마케팅 발송용)
+model Prospect {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  email     String? // 이메일 (선택사항, 연락처는 이메일 또는 전화번호)
+  phone     String? // 전화번호 (선택사항)
+  source    String? // 엑셀 업로드, 수동 입력 등
+  notes     String? // 메모
+  tags      Json? // 태그 배열
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([phone])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+// 페이지 콘텐츠 관리 (노코드 편집용)
+model PageContent {
+  id          Int      @id @default(autoincrement())
+  pagePath    String // 페이지 경로: '/support/service', '/support/notice', '/support/faq', '/events', '/community'
+  section     String // 섹션 키: 'header', 'services', 'notices', 'faqs', 'events', 'highlight' 등
+  itemId      String? // 아이템 ID (같은 섹션 내 여러 아이템 구분용)
+  contentType String // 'text', 'image', 'emoji', 'button', 'link', 'list' 등
+  content     Json // 콘텐츠 데이터 (유연한 구조)
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([pagePath, section, itemId])
+  @@index([pagePath, section, isActive])
+  @@index([order])
+  @@index([pagePath])
+}
+
+model PassportRequestTemplate {
+  id          Int      @id @default(autoincrement())
+  title       String   @default("여권 제출 안내")
+  body        String
+  variables   Json?
+  isDefault   Boolean  @default(false)
+  updatedById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy          User?                @relation("PassportRequestTemplate_updatedBy", fields: [updatedById], references: [id])
+  PassportRequestLog PassportRequestLog[]
+}
+
+model PassportRequestLog {
+  id             Int                   @id @default(autoincrement())
+  userId         Int
+  adminId        Int
+  templateId     Int?
+  messageBody    String
+  messageChannel String                @default("SMS")
+  status         PassportRequestStatus @default(PENDING)
+  errorReason    String?
+  sentAt         DateTime              @default(now())
+
+  user     User                     @relation("PassportRequestUser", fields: [userId], references: [id])
+  admin    User                     @relation("PassportRequestAdmin", fields: [adminId], references: [id])
+  template PassportRequestTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([userId, sentAt])
+  @@index([adminId, sentAt])
+  @@index([status, sentAt])
+}
+
+model PassportSubmission {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  tripId         Int?
+  token          String    @unique
+  tokenExpiresAt DateTime
+  isSubmitted    Boolean   @default(false)
+  submittedAt    DateTime?
+  driveFolderUrl String?
+  extraData      Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user   User                      @relation(fields: [userId], references: [id])
+  trip   Trip?                     @relation(fields: [tripId], references: [id])
+  guests PassportSubmissionGuest[]
+
+  @@index([userId])
+  @@index([tripId])
+  @@index([isSubmitted, updatedAt])
+}
+
+model PassportSubmissionGuest {
+  id                 Int       @id @default(autoincrement())
+  submissionId       Int
+  groupNumber        Int
+  name               String
+  phone              String?
+  passportNumber     String?
+  nationality        String?
+  dateOfBirth        DateTime?
+  passportExpiryDate DateTime?
+  ocrRawData         Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  submission PassportSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, groupNumber])
+  @@index([name])
+}
+
+enum PassportRequestStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum AffiliateType {
+  HQ
+  BRANCH_MANAGER
+  SALES_AGENT
+}
+
+enum AffiliateStatus {
+  DRAFT
+  AWAITING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum AffiliateRelationStatus {
+  ACTIVE
+  PAUSED
+  TERMINATED
+}
+
+enum AffiliateLinkStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum AffiliateLeadStatus {
+  NEW
+  CONTACTED
+  IN_PROGRESS
+  PURCHASED
+  REFUNDED
+  CLOSED
+  TEST_GUIDE
+}
+
+enum AffiliateSaleStatus {
+  PENDING
+  CONFIRMED
+  REFUNDED
+  CANCELLED
+  PAYOUT_SCHEDULED
+  PAID
+}
+
+enum SettlementStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  LOCKED
+  PAID
+}
+
+enum CommissionEntryType {
+  HQ_NET
+  BRANCH_COMMISSION
+  SALES_COMMISSION
+  OVERRIDE_COMMISSION
+  WITHHOLDING
+  ADJUSTMENT
+  REFUND
+  OTHER
+}
+
+enum ContractStatus {
+  DRAFT
+  REQUESTED
+  SENT
+  SIGNED
+  ARCHIVED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum MediaVisibility {
+  INTERNAL
+  HQ_ONLY
+  BRANCH_TEAM
+}
+
+enum AdjustmentStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model AffiliateProfile {
+  id                  Int             @id @default(autoincrement())
+  userId              Int             @unique
+  affiliateCode       String          @unique
+  type                AffiliateType
+  status              AffiliateStatus @default(DRAFT)
+  displayName         String?
+  branchLabel         String?
+  nickname            String?
+  profileTitle        String?
+  bio                 String?
+  profileImage        String?
+  coverImage          String?
+  contactPhone        String?
+  contactEmail        String?
+  kakaoLink           String?
+  instagramHandle     String?
+  youtubeChannel      String?
+  homepageUrl         String?
+  landingSlug         String?         @unique
+  landingTheme        Json?
+  landingAnnouncement String?
+  welcomeMessage      String?
+  externalLinks       Json?
+  published           Boolean         @default(true)
+  publishedAt         DateTime?
+  bankName            String?
+  bankAccount         String?
+  bankAccountHolder   String?
+  withholdingRate     Float           @default(3.3)
+  contractStatus      ContractStatus  @default(DRAFT)
+  contractSignedAt    DateTime?
+  kycCompletedAt      DateTime?
+  onboardedAt         DateTime?
+  metadata            Json?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  managedRelations   AffiliateRelation[]    @relation("ManagerRelations")
+  agentRelations     AffiliateRelation[]    @relation("AgentRelations")
+  documents          AffiliateDocument[]
+  linksAsManager     AffiliateLink[]        @relation("LinkBranchManager")
+  linksAsAgent       AffiliateLink[]        @relation("LinkSalesAgent")
+  leadsAsManager     AffiliateLead[]        @relation("LeadBranchManager")
+  leadsAsAgent       AffiliateLead[]        @relation("LeadSalesAgent")
+  salesAsManager     AffiliateSale[]        @relation("SaleBranchManager")
+  salesAsAgent       AffiliateSale[]        @relation("SaleSalesAgent")
+  ledgerEntries      CommissionLedger[]
+  interactions       AffiliateInteraction[]
+  affiliateContracts AffiliateContract[]
+
+  @@index([type, status])
+  @@index([nickname])
+  @@index([displayName])
+}
+
+model AffiliateRelation {
+  id             Int                     @id @default(autoincrement())
+  managerId      Int
+  agentId        Int
+  status         AffiliateRelationStatus @default(ACTIVE)
+  connectedAt    DateTime?
+  disconnectedAt DateTime?
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  manager AffiliateProfile @relation("ManagerRelations", fields: [managerId], references: [id], onDelete: Cascade)
+  agent   AffiliateProfile @relation("AgentRelations", fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([managerId, agentId])
+  @@index([agentId, status])
+}
+
+model AffiliateDocument {
+  id           Int            @id @default(autoincrement())
+  profileId    Int
+  documentType String
+  status       DocumentStatus @default(UPLOADED)
+  filePath     String
+  fileName     String?
+  fileSize     Int?
+  fileHash     String?
+  uploadedById Int?
+  approvedById Int?
+  uploadedAt   DateTime       @default(now())
+  reviewedAt   DateTime?
+  metadata     Json?
+
+  profile             AffiliateProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  uploadedBy          User?              @relation("AffiliateDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  approvedBy          User?              @relation("AffiliateDocumentApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  media               AffiliateMedia[]
+  affiliateContract   AffiliateContract? @relation(fields: [affiliateContractId], references: [id])
+  affiliateContractId Int?
+
+  @@index([profileId, documentType])
+}
+
+model AffiliateProduct {
+  id                Int       @id @default(autoincrement())
+  productCode       String
+  cruiseProductId   Int?
+  title             String
+  status            String    @default("active")
+  currency          String    @default("KRW")
+  defaultSaleAmount Int?
+  defaultCostAmount Int?
+  defaultNetRevenue Int?
+  metadata          Json?
+  isPublished       Boolean   @default(true)
+  publishedAt       DateTime?
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  cruiseProduct   CruiseProduct?            @relation(fields: [cruiseProductId], references: [id], onDelete: SetNull)
+  commissionTiers AffiliateCommissionTier[]
+  affiliateLinks  AffiliateLink[]
+  affiliateSales  AffiliateSale[]
+
+  @@unique([productCode, effectiveFrom])
+  @@index([status])
+  @@index([isPublished])
+}
+
+model AffiliateCommissionTier {
+  id                 Int      @id @default(autoincrement())
+  affiliateProductId Int
+  cabinType          String
+  pricingRowId       String?
+  fareCategory       String?
+  fareLabel          String?
+  saleAmount         Int?
+  costAmount         Int?
+  hqShareAmount      Int?
+  branchShareAmount  Int?
+  salesShareAmount   Int?
+  overrideAmount     Int?
+  currency           String   @default("KRW")
+  metadata           Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  product AffiliateProduct @relation(fields: [affiliateProductId], references: [id], onDelete: Cascade)
+
+  @@unique([affiliateProductId, cabinType, fareCategory, fareLabel])
+  @@index([pricingRowId])
+}
+
+model AffiliateLink {
+  id                 Int                 @id @default(autoincrement())
+  code               String              @unique
+  title              String?
+  affiliateProductId Int?
+  productCode        String?
+  managerId          Int?
+  agentId            Int?
+  issuedById         Int
+  status             AffiliateLinkStatus @default(ACTIVE)
+  expiresAt          DateTime?
+  lastAccessedAt     DateTime?
+  campaignName       String?
+  description        String?
+  landingVariant     String?
+  utmSource          String?
+  utmMedium          String?
+  utmCampaign        String?
+  utmContent         String?
+  utmTerm            String?
+  metadata           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  product  AffiliateProduct?    @relation(fields: [affiliateProductId], references: [id], onDelete: SetNull)
+  manager  AffiliateProfile?    @relation("LinkBranchManager", fields: [managerId], references: [id], onDelete: SetNull)
+  agent    AffiliateProfile?    @relation("LinkSalesAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  issuedBy User                 @relation("AffiliateLinkIssuedBy", fields: [issuedById], references: [id], onDelete: Cascade)
+  leads    AffiliateLead[]
+  sales    AffiliateSale[]
+  events   AffiliateLinkEvent[]
+
+  @@index([managerId])
+  @@index([agentId])
+  @@index([status])
+  @@index([campaignName])
+  @@index([utmSource, utmMedium, utmCampaign])
+}
+
+model AffiliateLinkEvent {
+  id          Int      @id @default(autoincrement())
+  linkId      Int
+  actorId     Int?
+  eventType   String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  link  AffiliateLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  actor User?         @relation("AffiliateLinkEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([linkId, createdAt])
+}
+
+model AffiliateLead {
+  id                  Int                 @id @default(autoincrement())
+  linkId              Int?
+  managerId           Int?
+  agentId             Int?
+  customerName        String?
+  customerPhone       String?
+  status              AffiliateLeadStatus @default(NEW)
+  source              String?
+  passportRequestedAt DateTime?
+  passportCompletedAt DateTime?
+  lastContactedAt     DateTime?
+  nextActionAt        DateTime?
+  notes               String?
+  metadata            Json?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  link         AffiliateLink?         @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  manager      AffiliateProfile?      @relation("LeadBranchManager", fields: [managerId], references: [id], onDelete: SetNull)
+  agent        AffiliateProfile?      @relation("LeadSalesAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  interactions AffiliateInteraction[]
+  sales        AffiliateSale[]
+
+  @@index([status])
+  @@index([managerId, status])
+  @@index([agentId, status])
+  @@index([customerPhone])
+}
+
+model AffiliateInteraction {
+  id              Int      @id @default(autoincrement())
+  leadId          Int
+  profileId       Int?
+  createdById     Int
+  interactionType String
+  occurredAt      DateTime @default(now())
+  note            String?
+  metadata        Json?
+
+  lead      AffiliateLead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  profile   AffiliateProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  createdBy User              @relation("AffiliateInteractionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  media     AffiliateMedia[]
+
+  @@index([leadId, occurredAt])
+}
+
+model AffiliateMedia {
+  id            Int             @id @default(autoincrement())
+  interactionId Int?
+  documentId    Int?
+  storagePath   String
+  fileName      String?
+  fileSize      Int?
+  mimeType      String?
+  visibility    MediaVisibility @default(INTERNAL)
+  uploadedById  Int?
+  metadata      Json?
+  createdAt     DateTime        @default(now())
+
+  interaction AffiliateInteraction? @relation(fields: [interactionId], references: [id], onDelete: SetNull)
+  document    AffiliateDocument?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  uploadedBy  User?                 @relation("AffiliateMediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([interactionId])
+  @@index([documentId])
+}
+
+model AffiliateSale {
+  id                 Int                 @id @default(autoincrement())
+  externalOrderCode  String?             @unique
+  linkId             Int?
+  leadId             Int?
+  affiliateProductId Int?
+  managerId          Int?
+  agentId            Int?
+  productCode        String?
+  cabinType          String?
+  fareCategory       String?
+  headcount          Int?
+  saleAmount         Int
+  costAmount         Int?
+  netRevenue         Int?
+  branchCommission   Int?
+  salesCommission    Int?
+  overrideCommission Int?
+  withholdingAmount  Int?
+  status             AffiliateSaleStatus @default(PENDING)
+  saleDate           DateTime?
+  confirmedAt        DateTime?
+  refundedAt         DateTime?
+  cancellationReason String?
+  metadata           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  link          AffiliateLink?     @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  lead          AffiliateLead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  product       AffiliateProduct?  @relation(fields: [affiliateProductId], references: [id], onDelete: SetNull)
+  manager       AffiliateProfile?  @relation("SaleBranchManager", fields: [managerId], references: [id], onDelete: SetNull)
+  agent         AffiliateProfile?  @relation("SaleSalesAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  ledgerEntries CommissionLedger[]
+
+  @@index([status])
+  @@index([saleDate])
+  @@index([managerId])
+  @@index([agentId])
+}
+
+model CommissionLedger {
+  id                Int                 @id @default(autoincrement())
+  saleId            Int
+  profileId         Int?
+  entryType         CommissionEntryType
+  amount            Int
+  currency          String              @default("KRW")
+  withholdingAmount Int?
+  settlementId      Int?
+  isSettled         Boolean             @default(false)
+  notes             String?
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  sale        AffiliateSale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  profile     AffiliateProfile?      @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  settlement  MonthlySettlement?     @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+  adjustments CommissionAdjustment[]
+
+  @@unique([saleId, profileId, entryType])
+  @@index([saleId])
+  @@index([profileId, isSettled])
+}
+
+model CommissionAdjustment {
+  id            Int              @id @default(autoincrement())
+  ledgerId      Int
+  requestedById Int
+  approvedById  Int?
+  status        AdjustmentStatus @default(REQUESTED)
+  amount        Int
+  reason        String
+  metadata      Json?
+  requestedAt   DateTime         @default(now())
+  decidedAt     DateTime?
+
+  ledger      CommissionLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  requestedBy User             @relation("CommissionAdjustmentRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  approvedBy  User?            @relation("CommissionAdjustmentApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+}
+
+model MonthlySettlement {
+  id           Int              @id @default(autoincrement())
+  periodStart  DateTime
+  periodEnd    DateTime
+  targetRole   AffiliateType?
+  status       SettlementStatus @default(DRAFT)
+  approvedById Int?
+  approvedAt   DateTime?
+  lockedAt     DateTime?
+  paymentDate  DateTime?
+  exportUrl    String?
+  summary      Json?
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  ledgerEntries CommissionLedger[]
+  events        SettlementEvent[]
+  approvedBy    User?              @relation("MonthlySettlementApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([periodStart, periodEnd])
+  @@index([status])
+}
+
+model SettlementEvent {
+  id           Int      @id @default(autoincrement())
+  settlementId Int
+  userId       Int?
+  eventType    String
+  description  String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  settlement MonthlySettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  user       User?             @relation("SettlementEventActor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([settlementId, createdAt])
+}
+
+model AffiliateContract {
+  id                   Int       @id @default(autoincrement())
+  userId               Int?
+  name                 String
+  residentId           String
+  phone                String
+  email                String?
+  address              String
+  bankName             String?
+  bankAccount          String?
+  bankAccountHolder    String?
+  idCardPath           String?
+  idCardOriginalName   String?
+  bankbookPath         String?
+  bankbookOriginalName String?
+  invitedByProfileId   Int?
+  consentPrivacy       Boolean   @default(false)
+  consentNonCompete    Boolean   @default(false)
+  consentDbUse         Boolean   @default(false)
+  consentPenalty       Boolean   @default(false)
+  status               String    @default("submitted")
+  notes                String?
+  metadata             Json?
+  submittedAt          DateTime  @default(now())
+  reviewedAt           DateTime?
+  reviewerId           Int?
+  contractSignedAt     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user      User?               @relation("AffiliateContractApplicant", fields: [userId], references: [id], onDelete: SetNull)
+  reviewer  User?               @relation("AffiliateContractReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  invitedBy AffiliateProfile?   @relation(fields: [invitedByProfileId], references: [id], onDelete: SetNull)
+  documents AffiliateDocument[]
+
+  @@index([phone, status])
+  @@index([status, submittedAt])
+  @@index([invitedByProfileId])
+}

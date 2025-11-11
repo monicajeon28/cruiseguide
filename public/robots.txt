@@ -1,0 +1,8 @@
+User-agent: Pinterest
+Disallow: /
+User-agent: Pinterestbot
+Disallow: /
+
+# 전체 이미지 인덱싱 억제(선택)
+# User-agent: *
+# Disallow: /크루즈정보사진/ 

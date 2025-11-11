@@ -1,0 +1,751 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import fs from 'fs';
+import path from 'path';
+import { verifyJwt } from '@/lib/auth';
+import { withOptionalAuth } from '@/lib/authMiddleware';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyCzHskiUWDn3CgCEaVGPh-ymEOm4rcKT4I');
+
+export const POST = withOptionalAuth(async (request: NextRequest, userId?: string) => {
+  try {
+    const { message } = await request.json();
+
+    if (!message) {
+      return new NextResponse(JSON.stringify({ error: '메시지를 입력해주세요.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      });
+    }
+
+    console.log('사용자 질문:', message);
+
+    // "부산항" 관련 질문 처리 (크루즈 터미널 위치)
+    if (message.toLowerCase().includes('부산항') && (message.includes('어디서') || message.includes('어디에서') || message.includes('크루즈'))) {
+      // 부산 크루즈 터미널 위치 이미지 직접 제공
+      const busanTerminalImage = "/크루즈정보사진/부산 크루즈 터미널 위치/부산항 MSC 밸리시마 승하선 위치 지도.png";
+      
+      return new NextResponse(JSON.stringify({
+        text: '부산에서 크루즈를 타시는 곳은 부산 크루즈 터미널입니다! 위치를 보여드릴게요.',
+        imageUrl: busanTerminalImage,
+        photoAlbum: ["/크루즈정보사진/부산 크루즈 터미널 위치/부산항 MSC 밸리시마 승하선 위치 지도.png", "/크루즈정보사진/부산 크루즈 터미널 위치/부산항 코타세레나호 승하선 위치 지도.png"],
+        suggestions: [
+          '부산 크루즈 터미널 교통편',
+          '부산 크루즈 터미널 주차장',
+          '지니야 궁금한거 물어보고싶어'
+        ],
+        source: 'busan_terminal',
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      });
+    }
+
+    // "크루즈" 단독 질문 처리 (구체적인 크루즈선 옵션 제공)
+    if (message.trim().toLowerCase() === '크루즈') {
+      return new NextResponse(JSON.stringify({
+        text: '어떤 크루즈가 궁금해? 보고 싶은 크루즈선을 선택해주세요!',
+        suggestions: [
+          '코스타 세레나',
+          '로얄 캐리비안', 
+          'MSC 벨리시마'
+        ],
+        source: 'cruise_clarification',
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      });
+    }
+
+    // "지니야 궁금한거 물어보고싶어" 처리 - 사용자의 새로운 질문을 받고 Gemini로 응답
+    if (message.trim() === "지니야 궁금한거 물어보고싶어") {
+      return new NextResponse(JSON.stringify({
+        text: "지니가 궁금한 것을 물어보세요! 😊🧞‍♂️ 뭐든지 도와드릴게요!",
+        suggestions: [
+          "코스타 세레나 크루즈는 어떤가요?",
+          "일본 여행지 추천해주세요",
+          "크루즈 준비물 알려주세요"
+        ],
+        source: "genie_prompt",
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      });
+    }
+
+    // "사진", "이미지" 키워드 처리 - 크루즈정보사진 폴더에서 검색
+    if (message.includes("사진") || message.includes("이미지")) {
+      const photoSearchResult = await searchPhotosInCruiseInfo(message);
+      
+      if (photoSearchResult.images.length > 0) {
+        return new NextResponse(JSON.stringify({
+          text: `네! 사진을 찾아드릴게요! 😊 총 ${photoSearchResult.images.length}장의 관련 사진이 있어요. 먼저 대표적인 사진을 보여드릴게요!`,
+          imageUrl: photoSearchResult.images[0],
+          photoAlbum: photoSearchResult.images,
+          suggestions: [
+            "더 많은 사진 보기",
+          ],
+          source: "photo_search",
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { "Content-Type": "application/json; charset=UTF-8" },
+        });
+      } else {
+        return new NextResponse(JSON.stringify({
+          text: `아쉽게도 관련 사진을 찾지 못했어요 😔 하지만 다른 질문을 해주시면 도와드릴게요!`,
+          suggestions: [
+            "코스타세레나 사진 보여줘",
+            "MSC 벨리시마 사진 보여줘",
+          ],
+          source: "photo_not_found",
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { "Content-Type": "application/json; charset=UTF-8" },
+        });
+      }
+    }
+
+    // "지도" 키워드 처리 - terminals.csv에서 검색 후 구글맵 링크 제공
+    if (message.includes("지도")) {
+      const mapResult = await searchMapInfo(message);
+      
+      if (mapResult.found) {
+        return new NextResponse(JSON.stringify({
+          text: `네! 지도 정보를 찾았어요! 🗺️ ${mapResult.location}에 대한 지도를 보여드릴게요.`,
+          imageUrl: mapResult.imageUrl,
+          photoAlbum: mapResult.imageUrl ? [mapResult.imageUrl] : [],
+          suggestions: [
+            "구글맵에서 보기",
+            "다른 지도 찾기",
+            "지니야 궁금한거 물어보고싶어"
+          ],
+          googleMapsUrl: mapResult.googleMapsUrl,
+          source: "map_search",
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { "Content-Type": "application/json; charset=UTF-8" },
+        });
+      } else {
+        // terminals.csv에 없으면 구글맵 링크만 제공
+        const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(message)}`;
+        
+        return new NextResponse(JSON.stringify({
+          text: `죄송해요, 제가 가진 지도에는 해당 정보가 없네요 😅 하지만 구글맵에서 찾아보실 수 있어요!`,
+          suggestions: [
+            "구글맵에서 보기",
+            "다른 지도 찾기",
+            "지니야 궁금한거 물어보고싶어"
+          ],
+          googleMapsUrl: googleMapsUrl,
+          source: "google_maps_fallback",
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { "Content-Type": "application/json; charset=UTF-8" },
+        });
+      }
+    }
+
+    // 1. 지능형 계층 검색 로직 실행
+    const searchResult = await intelligentImageSearch(message);
+    console.log('검색 결과:', searchResult);
+
+    // 2. 조건부 답변 생성
+    if (searchResult.images.length > 0) {
+      // 자료 있음 - 내부 이미지 기반 응답
+      const responseText = generateImageResponse(message, searchResult.keywords, searchResult.images.length, searchResult.searchType);
+      
+      return new NextResponse(JSON.stringify({
+        text: responseText,
+        imageUrl: searchResult.images[0], // 첫 번째 이미지
+        photoAlbum: searchResult.images, // 전체 이미지 목록
+        suggestions: [
+          '더 많은 사진 보기',
+          '지니야 궁금한거 물어보고싶어'
+        ],
+        source: 'internal_images',
+        searchType: searchResult.searchType,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      });
+    } else {
+      // 자료 없음 - Gemini 일반 지식 활용 (Gemini 실패 시 친근한 응답)
+      try {
+        const geminiResponse = await getGeminiResponse(message);
+        
+        return new NextResponse(JSON.stringify({
+          text: `음... 그 정보는 제 사진첩에는 없네요. 대신 외부에서 찾아본 정보를 알려드릴게요!\n\n${geminiResponse}`,
+          suggestions: [
+            '다른 질문하기',
+            '지니야 궁금한거 물어보고싶어'
+          ],
+          source: 'gemini',
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        });
+        
+      } catch (geminiError) {
+        console.error('Gemini 오류:', geminiError);
+        
+        // Gemini 실패 시에도 친근한 응답 제공
+        return new NextResponse(JSON.stringify({
+          text: `음... 그 정보는 제가 아직 배우지 못했어요. 😥\n\n하지만 궁금한 점이 있으시면 언제든지 물어보세요! 다른 질문을 해주시겠어요?`,
+          suggestions: [
+            '코스타세레나 내부 시설 보여줘',
+            '크루즈 여행 준비물 알려줘',
+            '일본 관광지 추천해줘',
+            '지니야 궁금한거 물어보고싶어'
+          ],
+          source: 'fallback',
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        });
+      }
+    }
+
+  } catch (error) {
+    console.error('Chat API 전체 오류:', error);
+    
+    return new NextResponse(JSON.stringify({
+      text: '앗, 잠시 문제가 생겼네요! 😅\n\n다시 시도해주시겠어요?',
+      suggestions: [
+        '다시 시도하기',
+        '지니야 궁금한거 물어보고싶어'
+      ],
+      source: 'error',
+      timestamp: new Date().toISOString()
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+    });
+  }
+});
+
+// 지능형 계층 검색 함수
+async function intelligentImageSearch(message: string): Promise<{
+  images: string[];
+  keywords: string[];
+  searchType: string;
+}> {
+  try {
+    const photosDir = path.join(process.cwd(), 'public', '크루즈정보사진');
+    
+    // 디렉토리가 존재하는지 확인
+    if (!fs.existsSync(photosDir)) {
+      console.log('크루즈정보사진 디렉토리가 존재하지 않습니다.');
+      return { images: [], keywords: [], searchType: 'none' };
+    }
+
+    // 1순위: 완전 일치 검색
+    const exactMatchResult = await searchExactMatch(message, photosDir);
+    if (exactMatchResult.images.length > 0) {
+      console.log('1순위 완전 일치 검색 성공:', exactMatchResult.keywords);
+      return { ...exactMatchResult, searchType: 'exact_match' };
+    }
+
+    // 2순위: 모든 단어 포함 검색 (AND 검색)
+    const allWordsResult = await searchAllWords(message, photosDir);
+    if (allWordsResult.images.length > 0) {
+      console.log('2순위 모든 단어 포함 검색 성공:', allWordsResult.keywords);
+      return { ...allWordsResult, searchType: 'all_words' };
+    }
+
+    // 3순위: 핵심 단어 검색 (마지막 단어)
+    const coreWordResult = await searchCoreWord(message, photosDir);
+    if (coreWordResult.images.length > 0) {
+      console.log('3순위 핵심 단어 검색 성공:', coreWordResult.keywords);
+      return { ...coreWordResult, searchType: 'core_word' };
+    }
+
+    // 4순위: 어느 단어든 포함 검색 (OR 검색)
+    const anyWordResult = await searchAnyWord(message, photosDir);
+    console.log('4순위 어느 단어든 포함 검색 결과:', anyWordResult.keywords);
+    return { ...anyWordResult, searchType: 'any_word' };
+    
+  } catch (error) {
+    console.error('지능형 이미지 검색 오류:', error);
+    return { images: [], keywords: [], searchType: 'error' };
+  }
+}
+
+// 1순위: 완전 일치 검색
+async function searchExactMatch(message: string, photosDir: string): Promise<{
+  images: string[];
+  keywords: string[];
+}> {
+  const keywords: string[] = [];
+  const messageLower = message.toLowerCase();
+  
+  // 띄어쓰기 없는 핵심 단어들 추출
+  const exactKeywords = [
+    '피아노랜드', 'pianoland',
+    '코스타세레나', 'costaserena', 'costa serena',
+    'msc밸리시마', 'msc밸리시마', 'msc bellissima',
+    '벨리시마크루즈', 'bellissimacruise',
+    '아이오나', 'iona',
+    '퀀텀', 'quantum',
+    '미야코지마', 'miyakojima',
+    '사세보', 'sasebo',
+    '도쿄', 'tokyo',
+    '오사카', 'osaka',
+    '홍콩', 'hong kong',
+    '싱가포르', 'singapore',
+    '베트남', 'vietnam',
+    '중국', 'china'
+  ];
+  
+  // 완전 일치 키워드 찾기
+  for (const keyword of exactKeywords) {
+    if (messageLower.includes(keyword.toLowerCase())) {
+      keywords.push(keyword);
+    }
+  }
+  
+  if (keywords.length === 0) {
+    return { images: [], keywords: [] };
+  }
+  
+  const images = await searchImagesByKeywords(keywords, photosDir);
+  return { images, keywords };
+}
+
+// 2순위: 모든 단어 포함 검색 (AND 검색)
+async function searchAllWords(message: string, photosDir: string): Promise<{
+  images: string[];
+  keywords: string[];
+}> {
+  // 질문을 단어 단위로 나누기 (띄어쓰기, 쉼표, 물음표 등으로 분리)
+  const words = message.toLowerCase()
+    .replace(/[.,!?]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 1); // 1글자 단어 제외
+  
+  if (words.length < 2) {
+    return { images: [], keywords: [] };
+  }
+  
+  const images = await searchImagesByAllWords(words, photosDir);
+  return { images, keywords: words };
+}
+
+// 3순위: 핵심 단어 검색 (마지막 단어)
+async function searchCoreWord(message: string, photosDir: string): Promise<{
+  images: string[];
+  keywords: string[];
+}> {
+  // 질문을 단어 단위로 나누기
+  const words = message.toLowerCase()
+    .replace(/[.,!?]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 1);
+  
+  if (words.length === 0) {
+    return { images: [], keywords: [] };
+  }
+  
+  // 가장 마지막 단어를 핵심 단어로 사용
+  const coreWord = words[words.length - 1];
+  const images = await searchImagesByKeywords([coreWord], photosDir);
+  
+  return { images, keywords: [coreWord] };
+}
+
+// 4순위: 어느 단어든 포함 검색 (OR 검색)
+async function searchAnyWord(message: string, photosDir: string): Promise<{
+  images: string[];
+  keywords: string[];
+}> {
+  // 질문을 단어 단위로 나누기
+  const words = message.toLowerCase()
+    .replace(/[.,!?]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 1);
+  
+  if (words.length === 0) {
+    return { images: [], keywords: [] };
+  }
+  
+  const images = await searchImagesByAnyWord(words, photosDir);
+  return { images, keywords: words };
+}
+
+// 키워드로 이미지 검색 (완전 일치용)
+async function searchImagesByKeywords(keywords: string[], photosDir: string): Promise<string[]> {
+  const foundImages: string[] = [];
+  
+  function searchDirectory(dirPath: string, relativePath: string = '') {
+    const items = fs.readdirSync(dirPath);
+    
+    for (const item of items) {
+      const itemPath = path.join(dirPath, item);
+      const itemRelativePath = path.join(relativePath, item);
+      const stat = fs.statSync(itemPath);
+      
+      if (stat.isDirectory()) {
+        searchDirectory(itemPath, itemRelativePath);
+      } else if (stat.isFile()) {
+        const ext = path.extname(item).toLowerCase();
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv'];
+        
+        if (imageExtensions.includes(ext) || videoExtensions.includes(ext)) {
+          const fileName = item.toLowerCase();
+          const hasKeyword = keywords.some(keyword => 
+            fileName.includes(keyword.toLowerCase())
+          );
+          
+          if (hasKeyword) {
+            foundImages.push(`/크루즈정보사진/${itemRelativePath.replace(/\\/g, '/')}`);
+          }
+        }
+      }
+    }
+  }
+  
+  searchDirectory(photosDir);
+  return foundImages;
+}
+
+// 모든 단어가 포함된 이미지 검색 (AND 검색)
+async function searchImagesByAllWords(words: string[], photosDir: string): Promise<string[]> {
+  const foundImages: string[] = [];
+  
+  function searchDirectory(dirPath: string, relativePath: string = '') {
+    const items = fs.readdirSync(dirPath);
+    
+    for (const item of items) {
+      const itemPath = path.join(dirPath, item);
+      const itemRelativePath = path.join(relativePath, item);
+      const stat = fs.statSync(itemPath);
+      
+      if (stat.isDirectory()) {
+        searchDirectory(itemPath, itemRelativePath);
+      } else if (stat.isFile()) {
+        const ext = path.extname(item).toLowerCase();
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv'];
+        
+        if (imageExtensions.includes(ext) || videoExtensions.includes(ext)) {
+          const fileName = item.toLowerCase();
+          // 모든 단어가 포함되어야 함 (AND 조건)
+          const hasAllWords = words.every(word => 
+            fileName.includes(word.toLowerCase())
+          );
+          
+          if (hasAllWords) {
+            foundImages.push(`/크루즈정보사진/${itemRelativePath.replace(/\\/g, '/')}`);
+          }
+        }
+      }
+    }
+  }
+  
+  searchDirectory(photosDir);
+  return foundImages;
+}
+
+// 어느 단어든 포함된 이미지 검색 (OR 검색)
+async function searchImagesByAnyWord(words: string[], photosDir: string): Promise<string[]> {
+  const foundImages: string[] = [];
+  
+  function searchDirectory(dirPath: string, relativePath: string = '') {
+    const items = fs.readdirSync(dirPath);
+    
+    for (const item of items) {
+      const itemPath = path.join(dirPath, item);
+      const itemRelativePath = path.join(relativePath, item);
+      const stat = fs.statSync(itemPath);
+      
+      if (stat.isDirectory()) {
+        searchDirectory(itemPath, itemRelativePath);
+      } else if (stat.isFile()) {
+        const ext = path.extname(item).toLowerCase();
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv'];
+        
+        if (imageExtensions.includes(ext) || videoExtensions.includes(ext)) {
+          const fileName = item.toLowerCase();
+          // 단어 중 하나라도 포함되면 됨 (OR 조건)
+          const hasAnyWord = words.some(word => 
+            fileName.includes(word.toLowerCase())
+          );
+          
+          if (hasAnyWord) {
+            foundImages.push(`/크루즈정보사진/${itemRelativePath.replace(/\\/g, '/')}`);
+          }
+        }
+      }
+    }
+  }
+  
+  searchDirectory(photosDir);
+  return foundImages;
+}
+
+// 이미지 기반 응답 생성 함수
+function generateImageResponse(message: string, keywords: string[], imageCount: number, searchType: string): string {
+  const messageLower = message.toLowerCase();
+  
+  let baseResponse = '';
+  
+  // 검색 타입에 따른 응답
+  switch (searchType) {
+    case 'exact_match':
+      baseResponse = `와! 정확히 찾았어요! 😊 ${keywords.join(', ')}에 대한 사진을 찾았어요!`;
+      break;
+    case 'all_words':
+      baseResponse = `와! .* 모두 포함된 사진을 찾았어요! 😊`;
+      break;
+    case 'core_word':
+      baseResponse = `와! .* 관련 사진을 찾았어요! 😊`;
+      break;
+    case 'any_word':
+      baseResponse = `와! .* 중 일부와 관련된 사진을 찾았어요! 😊`;
+      break;
+    default:
+      baseResponse = `와! 관련 사진을 찾았어요! 😊`;
+  }
+  
+  // 질문 유형에 따른 추가 설명
+  if (messageLower.includes('내부') || messageLower.includes('시설')) {
+    return `${baseResponse} 먼저 대표적인 사진 한 장을 보여드릴게요. 총 ${imageCount}장의 사진이 있어요.`;
+  } else if (messageLower.includes('외관') || messageLower.includes('외부')) {
+    return `${baseResponse} 먼저 대표적인 사진 한 장을 보여드릴게요. 총 ${imageCount}장의 사진이 있어요.`;
+  } else if (messageLower.includes('객실')) {
+    return `${baseResponse} 먼저 대표적인 사진 한 장을 보여드릴게요. 총 ${imageCount}장의 사진이 있어요.`;
+  } else if (messageLower.includes('레스토랑')) {
+    return `${baseResponse} 먼저 대표적인 사진 한 장을 보여드릴게요. 총 ${imageCount}장의 사진이 있어요.`;
+  } else if (messageLower.includes('수영장')) {
+    return `${baseResponse} 먼저 대표적인 사진 한 장을 보여드릴게요. 총 ${imageCount}장의 사진이 있어요.`;
+  } else {
+    return `${baseResponse} 먼저 대표적인 사진 한 장을 보여드릴게요. 총 ${imageCount}장의 사진이 있어요.`;
+  }
+}
+
+// Gemini 응답 생성 함수
+async function getGeminiResponse(message: string): Promise<string> {
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+
+    const systemPrompt = `당신은 100번 이상 크루즈를 탄 친근한 전문가 '지니'입니다.
+
+사용자의 질문에 대해 친근하고 도움이 되는 답변을 해주세요.
+
+**답변 규칙**:
+1. 친근하고 따뜻한 톤으로 답변하세요
+2. 구체적이고 실용적인 정보를 제공하세요
+3. 크루즈 여행 경험을 바탕으로 한 조언을 포함하세요
+4. 답변 마지막에 "궁금한 점이 더 있으시면 언제든지 물어보세요! 🧞‍♂️"라고 마무리하세요
+5. 절대 코드나 기술적인 내용은 포함하지 마세요
+6. 장소 관련 질문일 경우 구글맵 링크를 포함하세요
+7. **중요**: 만약 사용자의 이미지 검색 결과가 없을 경우, 그냥 '없습니다'라고 말하지 말고, '음... 그 사진은 제 앨범에 없네요. 혹시 '코스타 세레나' 처럼 구체적인 크루즈선 이름으로 다시 물어보시겠어요?' 와 같이 **더 좋은 검색 방법을 친절하게 안내**해줘.
+
+사용자 질문: ${message}`;
+
+    const result = await model.generateContent(systemPrompt);
+    const response = result.response.text();
+
+    return response;
+
+  } catch (error) {
+    console.error('Gemini 응답 생성 오류:', error);
+    throw error;
+  }
+}
+
+// 크루즈정보사진 폴더에서 사진 검색 함수
+async function searchPhotosInCruiseInfo(message: string): Promise<{ images: string[] }> {
+  try {
+    const photosDir = path.join(process.cwd(), 'public', '크루즈정보사진');
+    
+    if (!fs.existsSync(photosDir)) {
+      return { images: [] };
+    }
+
+    const foundImages: string[] = [];
+    
+    function searchDirectory(dirPath: string, relativePath: string = '') {
+      const items = fs.readdirSync(dirPath);
+      
+      for (const item of items) {
+        const itemPath = path.join(dirPath, item);
+        const itemRelativePath = path.join(relativePath, item);
+        const stat = fs.statSync(itemPath);
+        
+        if (stat.isDirectory()) {
+          searchDirectory(itemPath, itemRelativePath);
+        } else if (stat.isFile()) {
+          const ext = path.extname(item).toLowerCase();
+          const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+          const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv'];
+          
+          if (imageExtensions.includes(ext) || videoExtensions.includes(ext)) {
+            // 사진/이미지 키워드가 포함된 파일명 검색
+            const fileName = item.toLowerCase();
+            const messageLower = message.toLowerCase();
+            
+            // 메시지에서 키워드 추출 (사진, 이미지 제외)
+            const keywords = messageLower
+              .replace(/[사진|이미지]/g, '')
+              .replace(/[.,!?]/g, ' ')
+              .split(/\s+/)
+              .filter(word => word.length > 1);
+            
+            // 키워드 중 하나라도 파일명에 포함되면 추가
+            const hasKeyword = keywords.some(keyword => 
+              fileName.includes(keyword.toLowerCase())
+            );
+            
+            if (hasKeyword) {
+              foundImages.push(`/크루즈정보사진/${itemRelativePath.replace(/\\/g, '/')}`);
+            }
+          }
+        }
+      }
+    }
+    
+    searchDirectory(photosDir);
+    return { images: foundImages };
+    
+  } catch (error) {
+    console.error('사진 검색 오류:', error);
+    return { images: [] };
+  }
+}
+
+// 지도 정보 검색 함수 (terminals.csv에서 검색)
+async function searchMapInfo(message: string): Promise<{
+  found: boolean;
+  location?: string;
+  imageUrl?: string;
+  googleMapsUrl?: string;
+}> {
+  try {
+    // terminals.csv 파일 읽기
+    const terminalsPath = path.join(process.cwd(), 'public', 'terminals.csv');
+    
+    if (!fs.existsSync(terminalsPath)) {
+      // terminals.csv가 없으면 구글맵 링크만 제공
+      const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(message)}`;
+      return {
+        found: false,
+        googleMapsUrl: googleMapsUrl
+      };
+    }
+
+    const csvContent = fs.readFileSync(terminalsPath, 'utf-8');
+    const lines = csvContent.split('\n');
+    
+    // CSV 헤더 제거
+    const dataLines = lines.slice(1).filter(line => line.trim());
+    
+    // 메시지에서 키워드 추출 (지도 제외)
+    const messageLower = message.toLowerCase();
+    const keywords = messageLower
+      .replace(/[지도]/g, '')
+      .replace(/[.,!?]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 1);
+    
+    for (const line of dataLines) {
+      const columns = line.split(',');
+      if (columns.length >= 3) {
+        const city = columns[0]?.trim().toLowerCase();
+        const country = columns[1]?.trim().toLowerCase();
+        const description = columns[2]?.trim().toLowerCase();
+        
+        // 키워드와 매칭되는지 확인
+        const hasMatch = keywords.some(keyword => 
+          city?.includes(keyword) || 
+          country?.includes(keyword) || 
+          description?.includes(keyword)
+        );
+        
+        if (hasMatch) {
+          // 크루즈정보사진 폴더에서 해당 지도 이미지 찾기
+          const mapImagePath = await findMapImage(city, country, description);
+          
+          const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(message)}`;
+          
+          return {
+            found: true,
+            location: `${columns[0]} ${columns[1]}`,
+            imageUrl: mapImagePath,
+            googleMapsUrl: googleMapsUrl
+          };
+        }
+      }
+    }
+    
+    // 매칭되는 항목이 없으면 구글맵 링크만 제공
+    const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(message)}`;
+    return {
+      found: false,
+      googleMapsUrl: googleMapsUrl
+    };
+    
+  } catch (error) {
+    console.error('지도 검색 오류:', error);
+    const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(message)}`;
+    return {
+      found: false,
+      googleMapsUrl: googleMapsUrl
+    };
+  }
+}
+
+// 지도 이미지 찾기 함수
+async function findMapImage(city: string, country: string, description: string): Promise<string | undefined> {
+  try {
+    const photosDir = path.join(process.cwd(), 'public', '크루즈정보사진');
+    
+    if (!fs.existsSync(photosDir)) {
+      return undefined;
+    }
+
+    function searchDirectory(dirPath: string, relativePath: string = '') {
+      const items = fs.readdirSync(dirPath);
+      
+      for (const item of items) {
+        const itemPath = path.join(dirPath, item);
+        const itemRelativePath = path.join(relativePath, item);
+        const stat = fs.statSync(itemPath);
+        
+        if (stat.isDirectory()) {
+          const result = searchDirectory(itemPath, itemRelativePath);
+          if (result) return result;
+        } else if (stat.isFile()) {
+          const ext = path.extname(item).toLowerCase();
+          const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+          
+          if (imageExtensions.includes(ext)) {
+            const fileName = item.toLowerCase();
+            
+            // 지도 관련 키워드가 포함된 파일명 검색
+            const hasMapKeyword = fileName.includes('지도') || 
+                                 fileName.includes('map') || 
+                                 fileName.includes('터미널') ||
+                                 fileName.includes('terminal');
+            
+            // 도시/국가명이 포함된 파일명 검색
+            const hasLocationKeyword = (city && fileName.includes(city)) ||
+                                      (country && fileName.includes(country));
+            
+            if (hasMapKeyword && hasLocationKeyword) {
+              return `/크루즈정보사진/${itemRelativePath.replace(/\\/g, '/')}`;
+            }
+          }
+        }
+      }
+      return undefined;
+    }
+    
+    return searchDirectory(photosDir);
+    
+  } catch (error) {
+    console.error('지도 이미지 검색 오류:', error);
+    return undefined;
+  }
+}

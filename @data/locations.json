@@ -1,0 +1,149 @@
+{
+  "terminals": {
+    "홍콩 카이탁 크루즈 터미널": {
+      "name": "홍콩 카이탁 크루즈 터미널",
+      "map_query": "Kai Tak Cruise Terminal, Hong Kong"
+    },
+    "부산국제크루즈터미널": {
+      "name": "부산국제크루즈터미널",
+      "map_query": "Busan International Cruise Terminal"
+    },
+    "부산항 국제여객터미널": {
+      "name": "부산항 국제여객터미널",
+      "map_query": "Busan Port International Passenger Terminal"
+    },
+    "인천항 크루즈터미널": {
+      "name": "인천항 크루즈터미널",
+      "map_query": "Incheon Port Cruise Terminal"
+    },
+    "속초 국제 크루즈터미널": {
+      "name": "속초 국제 크루즈터미널",
+      "map_query": "Sokcho International Cruise Terminal"
+    },
+    "제주 국제 여객선 터미널": {
+      "name": "제주 국제 여객선 터미널",
+      "map_query": "Jeju International Passenger Terminal"
+    },
+    "서귀포 강정 크루즈터미널": {
+      "name": "서귀포 강정 크루즈터미널",
+      "map_query": "Seogwipo Gangjeong Cruise Terminal"
+    },
+    "포항영일신항만": {
+      "name": "포항영일신항만",
+      "map_query": "Pohang Yeongilman Port"
+    },
+    "대산항국제여객터미널": {
+      "name": "대산항국제여객터미널",
+      "map_query": "Daesan Port International Passenger Terminal"
+    },
+    "대만 서쪽 크루즈 터미널": {
+      "name": "대만 서쪽 크루즈 터미널",
+      "map_query": "West Passenger Terminal, Keelung"
+    },
+    "대만 동쪽 크루즈 터미널": {
+      "name": "대만 동쪽 크루즈 터미널",
+      "map_query": "TIPC Port of Keelung"
+    },
+    "마리나 베이 크루즈 센터 싱가포르": {
+      "name": "마리나 베이 크루즈 센터 싱가포르",
+      "map_query": "Marina Bay Cruise Centre Singapore"
+    },
+    "나하 크루즈 터미널": {
+      "name": "나하 크루즈 터미널",
+      "map_query": "Naha Cruise Terminal"
+    },
+    "이시가키 크루즈 터미널": {
+      "name": "이시가키 크루즈 터미널",
+      "map_query": "Ishigaki New Port Cruise Ship Terminal"
+    },
+    "미야코지마 크루즈 터미널": {
+      "name": "미야코지마 크루즈 터미널",
+      "map_query": "Hirara Port, Miyakojima"
+    },
+    "후쿠오카 크루즈 터미널": {
+      "name": "후쿠오카 크루즈 터미널",
+      "map_query": "Cruise Pier Fukuoka"
+    },
+    "고베 크루즈 터미널": {
+      "name": "고베 크루즈 터미널",
+      "map_query": "Kobe Port Terminal"
+    },
+    "사세보 구항구": {
+      "name": "사세보 구항구",
+      "map_query": "Kujiraze Terminal, Sasebo"
+    },
+    "사세보 신항구": {
+      "name": "사세보 신항구",
+      "map_query": "Uragashira International Terminal, Sasebo"
+    },
+    "도쿄 국제 크루즈 터미널": {
+      "name": "도쿄 국제 크루즈 터미널",
+      "map_query": "Tokyo International Cruise Terminal"
+    },
+    "가나자와 크루즈 터미널": {
+      "name": "가나자와 크루즈 터미널",
+      "map_query": "Kanazawa Port Cruise Terminal"
+    },
+    "상하이 우송커우 크루즈터미널": {
+      "name": "상하이 우송커우 크루즈터미널",
+      "map_query": "Shanghai Wusongkou International Cruise Terminal"
+    },
+    "상하이 크루즈터미널": {
+      "name": "상하이 크루즈터미널",
+      "map_query": "Shanghai Cruise Terminal"
+    }
+  },
+  "airports": {
+    "인천국제공항": {
+      "name": "인천국제공항",
+      "map_query": "Incheon International Airport"
+    },
+    "나리타 국제공항": {
+      "name": "나리타 국제공항",
+      "map_query": "Narita International Airport"
+    },
+    "홍콩 국제공항": {
+      "name": "홍콩 국제공항",
+      "map_query": "Hong Kong International Airport"
+    },
+    "간사이 국제공항": {
+      "name": "간사이 국제공항",
+      "map_query": "Kansai International Airport"
+    },
+    "나하 공항": {
+      "name": "나하 공항",
+      "map_query": "Naha Airport"
+    }
+  },
+  "stations": {
+    "도쿄역": {
+      "name": "도쿄역",
+      "map_query": "Tokyo Station"
+    },
+    "사세보역": {
+      "name": "사세보역",
+      "map_query": "Sasebo Station"
+    },
+    "오사카역": {
+      "name": "오사카역",
+      "map_query": "Osaka Station"
+    }
+  },
+  "landmarks": {
+    "오사카성": {
+      "name": "오사카성",
+      "map_query": "Osaka Castle"
+    }
+  },
+  "aliases": {
+    "카이탁": "홍콩 카이탁 크루즈 터미널",
+    "홍콩공항": "홍콩 국제공항",
+    "인천공항": "인천국제공항",
+    "나리타공항": "나리타 국제공항",
+    "간사이공항": "간사이 국제공항",
+    "사세보": "사세보 신항구",
+    "나가사키": "나가사키항",
+    "상해": "상하이 우송커우 크루즈터미널",
+    "상하이": "상하이 우송커우 크루즈터미널"
+  }
+} 

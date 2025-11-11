@@ -1,0 +1,35 @@
+{
+  "kakaoApiManagers": [
+    {
+      "id": "manager_1",
+      "name": "전혜선",
+      "phone": "010-2495-8013",
+      "notifyEnabled": true,
+      "registeredAt": "2021. 03. 09. 11:28"
+    }
+  ],
+  "kakaoApiKeys": [
+    {
+      "id": "apikey_1",
+      "identifier": "hyeseon28",
+      "key": "ykfcblofawtxt5b3gf7iyey30iufinqr",
+      "registeredAt": "2025. 11. 09. 22:27"
+    }
+  ],
+  "kakaoSenderKeys": [
+    {
+      "id": "senderkey_1",
+      "channelId": "@cruisedot (정상)",
+      "senderKey": "13b13496a0f51e9a602706d0dd8b27598088dd5a",
+      "registeredAt": "2025. 11. 09. 22:32"
+    }
+  ],
+  "serverIps": [
+    {
+      "id": "ip_1",
+      "ip": "125.132.80.142",
+      "registeredAt": "2025. 11. 09. 22:43"
+    }
+  ]
+}
+

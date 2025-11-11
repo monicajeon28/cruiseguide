@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 크루즈 가이드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react-markdown@8.0.0/react-markdown.min.js"></script>
+    <script src="https://unpkg.com/remark-gfm@3.0.1/remark-gfm.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .chat-bubble-user { animation: slideInUser 0.3s ease-out forwards; }
+        .chat-bubble-assistant { animation: slideInAssistant 0.3s ease-out forwards; }
+        @keyframes slideInUser { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideInAssistant { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        .chat-bubble a { pointer-events: auto; }
+        .chat-bubble { position: relative; z-index: 0; }
+        .chat-overlay { pointer-events: none; }
+        .chat-overlay * { pointer-events: none; }
+        /* 말풍선 링크 기본 스타일 */
+        .chat-bubble a.chat-link {
+          text-decoration: underline;
+          cursor: pointer;
+          pointer-events: auto;          /* 링크 자체 이벤트 활성화 */
+        }
+
+        /* 말풍선 컨테이너가 클릭을 가로채지 않도록 */
+        .chat-bubble {
+          pointer-events: auto;
+          background-color: transparent; /* 투명도 경고 해결 */
+        }
+
+        /* 채팅 위를 덮는 상단 고정 바/오버레이가 있으면 꼭 비활성화 */
+        .header-overlay,
+        .toast-overlay {
+          pointer-events: none;
+        }
+
+        /* 말풍선 안에 버튼/썸네일 그리드 클릭 잘 되도록 */
+        .chat-bubble .btn,
+        .chat-bubble .thumb {
+          pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div id="root" class="w-full h-full"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect, useCallback } = React;
+
+        // --- 데이터베이스 ---
+        const IMAGE_DB = {
+          "MSC벨리시마": ["/크루즈정보사진/MSC벨리시마/MSC 벨리시마 (1).png", "/크루즈정보사진/MSC벨리시마/MSC 벨리시마 (2).png", "/크루즈정보사진/MSC벨리시마/MSC 벨리시마 (3).png"],
+          "코스타세레나": ["/크루즈정보사진/코스타세레나/코스타세레나.jpg", "/크루즈정보사진/코스타세레나/코스타세레나호 (1).jpg"],
+          "일본 미야코지마": ["/크루즈정보사진/일본 미야코지마/미야코지마 1  (1).png", "/크루즈정보사진/일본 미야코지마/일본 미야코지마 (1).jpg"],
+          "고객 후기 자료": ["/크루즈정보사진/고객 후기 자료/코스타 세레나 개그맨 후기.jpg", "/크루즈정보사진/고객 후기 자료/코스타 세레나 공연 후기.jpg"],
+          "로얄캐리비안 스펙트럼": ["/크루즈정보사진/로얄캐리비안 스펙트럼/로얄 스펙트럼 (1).png", "/크루즈정보사진/로얄캐리비안 스펙트럼/로얄 스펙트럼 (2).png"],
+          "홍콩": ["/크루즈정보사진/홍콩/홍콩 1881 헤리티지 쇼핑몰 2.jpg", "/크루즈정보사진/홍콩/홍콩 K뮤제아.jpg"]
+        };
+
+        const LOCATIONS_DB = {
+            "terminals": {
+                "홍콩 카이탁 크루즈 터미널": { name: "홍콩 카이탁 크루즈 터미널", map_query: "Kai Tak Cruise Terminal, Hong Kong" },
+                "도쿄 국제 크루즈 터미널": { name: "도쿄 국제 크루즈 터미널", map_query: "Tokyo International Cruise Terminal" }
+            },
+            "airports": {
+                "인천국제공항": { name: "인천국제공항", map_query: "Incheon International Airport" },
+                "홍콩 국제공항": { name: "홍콩 국제공항", map_query: "Hong Kong International Airport" }
+            },
+            "stations": { "도쿄역": { name: "도쿄역", map_query: "Tokyo Station" } },
+            "aliases": {
+                "카이탁": "홍콩 카이탁 크루즈 터미널", "홍콩공항": "홍콩 국제공항", "인천공항": "인천국제공항",
+                "사세보": "사세보 신항구", "벨리시마": "MSC벨리시마", "미야코지마": "일본 미야코지마",
+                "스펙트럼": "로얄캐리비안 스펙트럼", "후기": "고객 후기 자료"
+            }
+        };
+
+        // --- 컴포넌트들 ---
+        const MessageContent = ({ content }) => {
+            if (typeof content !== 'string' || !content) return null;
+            return (
+                <div className="text-base whitespace-pre-wrap break-words">
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                            a: ({node, ...props}) => (
+                                <a
+                                    {...props}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="chat-link"
+                                    onClick={(e) => {
+                                        e.stopPropagation(); // 상위 클릭핸들러 차단
+                                    }}
+                                />
+                            ),
+                        }}
+                    >
+                        {content}
+                    </ReactMarkdown>
+                </div>
+            );
+        };
+
+        const ChatUI = ({ messages, isLoading, scrollRef, onImageClick, onOpenPhotoAlbum }) => {
+          return (
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 text-gray-800 text-lg leading-relaxed scrollbar-hide" ref={scrollRef}>
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`flex items-end gap-2 mb-4 ${msg.type === 'user' ? 'justify-end chat-bubble-user' : 'justify-start chat-bubble-assistant'}`}>
+                    {msg.type === 'assistant' && (
+                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 mr-2 shadow-sm border border-gray-200">
+                        <span className="text-2xl">🧞</span>
+                      </div>
+                    )}
+                    <div className={`max-w-md px-4 py-3 rounded-2xl shadow-md ${msg.type === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}`}>
+                      <MessageContent content={msg.content} />
+
+                      {/* [NEW] 선택지 버튼 */}
+                      {msg.chips && msg.chips.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {msg.chips.map((c, i) => (
+                            <button
+                              key={i}
+                              className="px-3 py-1.5 rounded-full border text-sm bg-blue-50 hover:bg-blue-100"
+                              onClick={(e) => { e.stopPropagation(); handleSendMessage(c.payload || c.label); }}
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {msg.photoAlbum && msg.photoAlbum.length > 0 && (
+                        <div className="mt-2">
+                          <div className="grid grid-cols-3 gap-2">
+                            {msg.photoAlbum.slice(0, 9).map((media, index) => (
+                              <div key={index} className="aspect-square bg-gray-200 rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onImageClick(msg.photoAlbum, index)}>
+                                  <img src={media} alt={`사진 ${index + 1}`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100/EEE/31343C?text=Error'; }}/>
+                              </div>
+                            ))}
+                          </div>
+                          {msg.photoAlbum.length > 9 && (
+                            <button onClick={() => onOpenPhotoAlbum(msg.photoAlbum)} className="mt-2 w-full text-center text-sm bg-blue-100 text-blue-800 px-3 py-2 rounded-lg hover:bg-blue-200 flex items-center justify-center gap-2">
+                              <i className="fa-regular fa-images"></i>
+                              <span>{msg.photoAlbum.length}장의 사진 모두 보기</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="flex items-end gap-2 justify-start chat-bubble-assistant">
+                     <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 mr-2 shadow-sm border border-gray-200"> <span className="text-2xl">🧞</span></div>
+                    <div className="bg-white text-gray-800 px-4 py-2 rounded-2xl shadow rounded-bl-none"><p className="text-base animate-pulse">지니가 찾고 있어요... 🧞‍♂️</p></div>
+                  </div>
+                )}
+            </div>
+          );
+        };
+
+        const PhotoAlbumModal = ({ isOpen, onClose, media, onImageClick }) => {
+          if (!isOpen) return null;
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={onClose}>
+              <div className="bg-white rounded-lg p-4 max-w-4xl w-11/12 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}> 
+                <div className="flex justify-between items-center mb-4"> <h2 className="text-2xl font-bold">사진 앨범</h2> <button onClick={onClose} className="text-2xl font-bold">&times;</button> </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {media.map((item, index) => (
+                    <div key={index} className="aspect-square bg-gray-200 rounded-lg overflow-hidden cursor-pointer" onClick={() => onImageClick(index)}>
+                      <img src={item} alt={`미디어 ${index + 1}`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = 'https://placehold.co/200x200/EEE/31343C?text=Error'; }}/>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const ImageViewerModal = ({ isOpen, onClose, images, currentIndex, setCurrentIndex }) => {
+          if (!isOpen || !images || images.length === 0) return null;
+          const goToPrevious = () => setCurrentIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+          const goToNext = () => setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" onClick={onClose}>
+              <button className="absolute top-1/2 left-4 text-white text-4xl p-2" onClick={(e) => { e.stopPropagation(); goToPrevious(); }}>&#10094;</button>
+                <img src={images[currentIndex]} className="max-w-[90vw] max-h-[90vh] object-contain" onError={(e) => { e.currentTarget.src = 'https://placehold.co/800x600/000/FFF?text=Error'; }}/>
+              <button className="absolute top-1/2 right-4 text-white text-4xl p-2" onClick={(e) => { e.stopPropagation(); goToNext(); }}>&#10095;</button>
+              <button className="absolute top-4 right-4 text-white text-4xl" onClick={onClose}>&times;</button>
+            </div>
+          );
+        };
+        
+        const App = () => {
+            const [messages, setMessages] = useState([]);
+            const [isLoading, setIsLoading] = useState(false);
+            const [isPhotoAlbumOpen, setIsPhotoAlbumOpen] = useState(false);
+            const [photoAlbumMedia, setPhotoAlbumMedia] = useState([]);
+            const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+            const [galleryImages, setGalleryImages] = useState([]);
+            const [currentImageIndex, setCurrentImageIndex] = useState(0);
+            const scrollRef = useRef(null);
+
+            useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
+
+            const findLocationName = (text) => {
+                const normalizedText = text.toLowerCase().replace(/\s+/g, '');
+                let bestMatch = null;
+                let highestScore = 0;
+
+                const allLocationNames = [
+                    ...Object.keys(LOCATIONS_DB.aliases),
+                    ...Object.keys(LOCATIONS_DB.terminals),
+                    ...Object.keys(LOCATIONS_DB.airports),
+                    ...Object.keys(LOCATIONS_DB.stations)
+                ];
+
+                for (const name of allLocationNames) {
+                    const normalizedName = name.toLowerCase().replace(/\s+/g, '');
+                    if (normalizedText.includes(normalizedName)) {
+                        const score = normalizedName.length;
+                        if (score > highestScore) {
+                            highestScore = score;
+                            bestMatch = name;
+                        }
+                    }
+                }
+                return LOCATIONS_DB.aliases[bestMatch] || bestMatch;
+            };
+
+            const getMapQuery = (name) => {
+                 for (const category of ['terminals', 'airports', 'stations']) {
+                    if (LOCATIONS_DB[category][name]) {
+                        return LOCATIONS_DB[category][name].map_query;
+                    }
+                }
+                return name; // Fallback to the name itself
+            };
+            
+            const getGenieResponse = (message) => {
+                const isNavQuery = /어떻게 가|가는 길|길찾기|네비|지도|맵|맛집|슈퍼|근처/i.test(message);
+                const isPhotoQuery = /보여줘|사진|이미지|어떻게 생겼/i.test(message);
+                
+                if (isNavQuery) {
+                    const originMatch = message.match(/(.+)에서/);
+                    let originText = originMatch ? originMatch[1].trim() : "내 위치";
+                    if (["내 위치", "현재 위치", "여기"].includes(originText)) originText = "My Location";
+
+                    const destinationText = message.split('에서').pop().split('까지')[0].replace(/가는 길|길찾기|네비|지도|맵|맛집|슈퍼|근처/i, '').trim();
+                    let destinationName = findLocationName(destinationText) || destinationText;
+                    let mapQuery = getMapQuery(destinationName);
+                    let originQuery = originText === "My Location" ? "" : (getMapQuery(findLocationName(originText)) || originText);
+
+                    let responseMessage;
+                    if (/맛집|슈퍼|마트/i.test(message)) {
+                        const keyword = message.match(/맛집|슈퍼|마트/i)[0];
+                        const nearByQuery = `${keyword} near ${mapQuery || originQuery}`;
+                        const nearByUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(nearByQuery)}`;
+                        responseMessage = `${destinationName || originText} 근처 '${keyword}' 목록이에요.\n\n[지도에서 전체 보기](${nearByUrl})`;
+                    } else {
+                        const drivingUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originQuery)}&destination=${encodeURIComponent(mapQuery)}&travelmode=driving`;
+                        const transitUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originQuery)}&destination=${encodeURIComponent(mapQuery)}&travelmode=transit`;
+                        responseMessage = `'${originText}'에서 '${destinationName}'(으)로 가는 길이에요.\n\n[🚗 자동차 길찾기](${drivingUrl})\n\n[🚌 대중교통 길찾기](${transitUrl})`;
+                    }
+                    return { content: responseMessage, source: 'nav_success' };
+                }
+
+                if (isPhotoQuery) {
+                    const normalizedText = message.toLowerCase().replace(/보여줘|사진|이미지|어떻게 생겼/g, '').replace(/\s+/g, '').trim();
+                    let bestMatch = null;
+                    let highestScore = 0;
+
+                    const allSearchableNames = [...Object.keys(IMAGE_DB), ...Object.keys(LOCATIONS_DB.aliases)];
+                    for (const name of allSearchableNames) {
+                        const normalizedName = name.toLowerCase().replace(/\s+/g, '');
+                        if (normalizedText.includes(normalizedName)) {
+                            const score = normalizedName.length;
+                            if (score > highestScore) {
+                                highestScore = score;
+                                bestMatch = name;
+                            }
+                        }
+                    }
+
+                    const folderName = LOCATIONS_DB.aliases[bestMatch] || bestMatch;
+
+                    if (folderName && IMAGE_DB[folderName]) {
+                         return {
+                            content: `네, '${folderName}' 관련 사진 ${IMAGE_DB[folderName].length}장을 찾았어요.`,
+                            photoAlbum: IMAGE_DB[folderName],
+                            source: 'photo_success',
+                        };
+                    }
+                    return { content: "어떤 사진을 보여드릴까요? 크루즈나 기항지 이름을 말씀해주세요. (예: 벨리시마 사진 보여줘)", source: 'photo_fail_not_found' };
+                }
+                 return { content: "죄송합니다. 아직 학습 중이라 답변하기 어려운 질문이에요. \n- **사진**: '벨리시마 보여줘'\n- **길찾기**: '홍콩공항에서 카이탁까지'", source: 'fallback' };
+            };
+            
+            const handleSendMessage = async (message) => {
+                if (!message.trim() || isLoading) return;
+                setMessages(prev => [...prev, { id: Date.now(), type: 'user', content: message }]);
+                setIsLoading(true);
+                await new Promise(res => setTimeout(res, 500));
+                const data = getGenieResponse(message);
+                setMessages(prev => [...prev, { ...data, id: Date.now() + 1, type: 'assistant' }]);
+                setIsLoading(false);
+            };
+
+            const handleImageClickInAlbum = (images, clickedIndex) => {
+                setGalleryImages(images);
+                setCurrentImageIndex(clickedIndex);
+                setIsImageViewerOpen(true);
+            };
+
+            const openPhotoAlbum = (media) => {
+                if (media && media.length > 0) {
+                    setPhotoAlbumMedia(media);
+                    setIsPhotoAlbumOpen(true);
+                }
+            };
+
+             useEffect(() => {
+                setMessages([
+                    {id: 1, type: 'assistant', content: '안녕하세요! 무엇을 도와드릴까요? 아래는 몇 가지 예시 질문입니다.\n- "MSC 벨리시마 보여줘"\n- "홍콩 공항에서 카이탁 크루즈 터미널까지 어떻게 가"\n- "내 위치 근처 맛집"'},
+                ]);
+            }, []);
+
+            return (
+                <div className="h-screen w-screen sm:h-[95vh] sm:max-h-[800px] sm:w-[450px] flex flex-col relative shadow-2xl bg-white mx-auto sm:rounded-2xl">
+                    <div className="bg-blue-600 text-white p-4 rounded-t-2xl flex items-center justify-center">
+                        <h1 className="text-xl font-bold">AI 크루즈 가이드 지니 🧞‍♂️</h1>
+                    </div>
+                    <ChatUI messages={messages} isLoading={isLoading} scrollRef={scrollRef} onImageClick={handleImageClickInAlbum} onOpenPhotoAlbum={openPhotoAlbum} />
+                    <div className="p-4 bg-white border-t border-gray-200 rounded-b-2xl">
+                        <form onSubmit={(e) => { e.preventDefault(); const input = e.target.elements.message; handleSendMessage(input.value); input.value = ''; }} className="flex gap-2">
+                            <input type="text" name="message" placeholder="지니에게 메시지 보내기..." className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autoComplete="off" />
+                            <button type="submit" className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400" disabled={isLoading}>전송</button>
+                        </form>
+                    </div>
+                     <PhotoAlbumModal isOpen={isPhotoAlbumOpen} onClose={() => setIsPhotoAlbumOpen(false)} media={photoAlbumMedia} onImageClick={(index) => handleImageClickInAlbum(photoAlbumMedia, index)} />
+                     <ImageViewerModal isOpen={isImageViewerOpen} onClose={() => setIsImageViewerOpen(false)} images={galleryImages} currentIndex={currentImageIndex} setCurrentIndex={setCurrentImageIndex} />
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
