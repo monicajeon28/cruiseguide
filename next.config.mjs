@@ -49,6 +49,14 @@ const nextConfig = {
   // Instrumentation 활성화 (스케줄러 자동 시작)
   experimental: {
     instrumentationHook: true,
+    // 큰 정적 파일들을 serverless 함수 번들에서 제외
+    outputFileTracingExcludes: {
+      '*': [
+        'public/크루즈정보사진/**/*',
+        'public/videos/**/*.mp4',
+        'public/uploads/**/*',
+      ],
+    },
   },
   
   // React Flow를 외부 패키지로 처리하여 SSR 문제 방지
