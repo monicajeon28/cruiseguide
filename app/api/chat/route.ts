@@ -17,6 +17,9 @@ function generateMessageId(): string {
 }
 import { askGemini, executeTool } from '@/lib/gemini';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(req: NextRequest) {
   const user = await getSessionUser(); // userId -> user
   if (!user) {
