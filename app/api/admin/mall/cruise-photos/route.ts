@@ -7,6 +7,9 @@ import * as path from 'path';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 const SESSION_COOKIE = 'cg.sid.v2';
 
 async function checkAdminAuth() {
