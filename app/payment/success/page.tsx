@@ -3,11 +3,11 @@
 export const dynamic = 'force-dynamic';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { FiCheckCircle, FiHome } from 'react-icons/fi';
 import Link from 'next/link';
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessPageContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
   const sessionId = searchParams.get('sessionId');
@@ -86,5 +86,13 @@ export default function PaymentSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <PaymentSuccessPageContent />
+    </Suspense>
   );
 }

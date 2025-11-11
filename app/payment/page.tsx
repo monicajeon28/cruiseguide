@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FiCreditCard, FiUser, FiMail, FiPhone, FiLock } from 'react-icons/fi';
 
@@ -12,7 +12,7 @@ interface PaymentPageProps {
   amount: number;
 }
 
-export default function PaymentPage({ productCode, productName, amount }: PaymentPageProps) {
+function PaymentPageContent({ productCode, productName, amount }: PaymentPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -222,5 +222,13 @@ export default function PaymentPage({ productCode, productName, amount }: Paymen
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PaymentPage(props: PaymentPageProps) {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <PaymentPageContent {...props} />
+    </Suspense>
   );
 }

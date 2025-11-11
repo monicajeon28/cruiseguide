@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -50,7 +50,7 @@ const toCombinedPost = (post: CruisedotNewsPost, source: "static" | "db", dbId?:
   dbId,
 });
 
-export default function CruisedotNewsPage() {
+function CruisedotNewsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [apiPosts, setApiPosts] = useState<ApiNewsPost[]>([]);
@@ -508,6 +508,14 @@ export default function CruisedotNewsPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function CruisedotNewsPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <CruisedotNewsPageContent />
+    </Suspense>
   );
 }
 

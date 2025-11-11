@@ -2,14 +2,14 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { setCsrfToken, clearAllLocalStorage } from '@/lib/csrf-client';
 import KakaoShareButton from '@/components/KakaoShareButton';
 import KakaoChannelButton from '@/components/KakaoChannelButton';
 
-export default function TestLoginPage() {
+function TestLoginPageContent() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -385,6 +385,14 @@ export default function TestLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TestLoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <TestLoginPageContent />
+    </Suspense>
   );
 }
 

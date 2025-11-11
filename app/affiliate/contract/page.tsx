@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import SignaturePad from 'signature_pad';
 
@@ -118,7 +118,7 @@ const CONTRACT_SECTIONS: Array<{ title: string; clauses: string[] }> = [
   },
 ];
 
-export default function AffiliateContractPublicPage() {
+function AffiliateContractPublicPageContent() {
   const [form, setForm] = useState(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingSignature, setUploadingSignature] = useState(false);
@@ -690,5 +690,14 @@ export default function AffiliateContractPublicPage() {
     </div>
   );
 }
+
+export default function AffiliateContractPublicPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <AffiliateContractPublicPageContent />
+    </Suspense>
+  );
+}
+
 
 

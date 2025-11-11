@@ -5,7 +5,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReviewModal from '@/components/chat-bot/ReviewModal';
 import BottomNavBar from '@/components/layout/BottomNavBar';
@@ -287,7 +287,7 @@ interface ProductInfo {
   endDate?: string | null;
 }
 
-export default function ChatBotPage() {
+function ChatBotPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const productCode = searchParams.get('productCode');
@@ -1593,6 +1593,14 @@ export default function ChatBotPage() {
         initialIndex={activeReviewIndex}
       />
     </div>
+  );
+}
+
+export default function ChatBotPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <ChatBotPageContent />
+    </Suspense>
   );
 }
 

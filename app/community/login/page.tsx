@@ -5,12 +5,12 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function CommunityLoginPage() {
+function CommunityLoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get('next') || '/community';
@@ -159,5 +159,13 @@ export default function CommunityLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CommunityLoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <CommunityLoginPageContent />
+    </Suspense>
   );
 }

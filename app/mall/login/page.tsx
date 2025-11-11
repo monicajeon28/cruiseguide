@@ -5,12 +5,12 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { setCsrfToken, clearAllLocalStorage } from '@/lib/csrf-client';
 
-export default function MallLoginPage() {
+function MallLoginPageContent() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const router = useRouter();
@@ -155,6 +155,14 @@ export default function MallLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function MallLoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <MallLoginPageContent />
+    </Suspense>
   );
 }
 

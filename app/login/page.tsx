@@ -2,12 +2,12 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { setCsrfToken, clearAllLocalStorage } from '@/lib/csrf-client';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [phone, setPhone] = useState('');        // ← 공백
   const [password, setPassword] = useState('');  // ← 공백
   const [name, setName] = useState('');          // ← 공백
@@ -284,5 +284,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">로딩 중...</div>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
