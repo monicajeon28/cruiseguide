@@ -4687,6 +4687,159 @@ function PromotionBannerEditor({
     </div>
   );
 }
+// 상단 메뉴 편집기
+function TopMenuEditor({
+  config,
+  onUpdate,
+  onClose,
+}: {
+  config: PageConfig['topMenu'];
+  onUpdate: (config: PageConfig['topMenu']) => void;
+  onClose: () => void;
+}) {
+  const [localConfig, setLocalConfig] = useState(config);
+
+  // 새 메뉴 항목 추가
+  const addMenuItem = () => {
+    const newItem = {
+      id: `top-menu-${Date.now()}`,
+      enabled: true,
+      text: '새 메뉴',
+      urlSlug: '/',
+      order: localConfig.menuItems.length + 1,
+      isButton: false,
+      buttonColor: 'blue-600',
+    };
+    setLocalConfig({
+      ...localConfig,
+      menuItems: [...localConfig.menuItems, newItem],
+    });
+  };
+
+  // 메뉴 항목 삭제
+  const removeMenuItem = (id: string) => {
+    setLocalConfig({
+      ...localConfig,
+      menuItems: localConfig.menuItems.filter(m => m.id !== id).map((m, idx) => ({
+        ...m,
+        order: idx + 1,
+      })),
+    });
+  };
+
+  // 순서 변경
+  const moveMenuItem = (index: number, direction: 'up' | 'down') => {
+    const items = [...localConfig.menuItems];
+    if (direction === 'up' && index > 0) {
+      [items[index - 1], items[index]] = [items[index], items[index - 1]];
+      items[index - 1].order = index;
+      items[index].order = index + 1;
+    } else if (direction === 'down' && index < items.length - 1) {
+      [items[index], items[index + 1]] = [items[index + 1], items[index]];
+      items[index].order = index + 1;
+      items[index + 1].order = index + 2;
+    }
+    setLocalConfig({ ...localConfig, menuItems: items });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold">상단 메뉴 편집</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <FiX size={20} />
+        </button>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 mb-3">
+          <input
+            type="checkbox"
+            checked={localConfig.enabled}
+            onChange={(e) => setLocalConfig({ ...localConfig, enabled: e.target.checked })}
+            className="w-5 h-5"
+          />
+          <span className="font-semibold">메뉴 활성화</span>
+        </label>
+        <p className="text-xs text-gray-500 mt-2">
+          • 체크 해제 시 상단 메뉴가 메인 페이지에 표시되지 않습니다.
+        </p>
+      </div>
+
+      {/* 로고 설정 */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          로고 이미지 URL
+        </label>
+        <input
+          type="text"
+          value={localConfig.logoUrl || ''}
+          onChange={(e) => setLocalConfig({ ...localConfig, logoUrl: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          placeholder="/images/logo.png"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          로고 클릭 시 이동할 링크
+        </label>
+        <input
+          type="text"
+          value={localConfig.logoLink || ''}
+          onChange={(e) => setLocalConfig({ ...localConfig, logoLink: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          placeholder="/"
+        />
+      </div>
+
+      {/* 환영 메시지 설정 */}
+      <div>
+        <label className="flex items-center gap-2 mb-3">
+          <input
+            type="checkbox"
+            checked={localConfig.welcomeMessage?.enabled || false}
+            onChange={(e) => setLocalConfig({
+              ...localConfig,
+              welcomeMessage: {
+                ...localConfig.welcomeMessage,
+                enabled: e.target.checked,
+                text: localConfig.welcomeMessage?.text || '{name}님 환영합니다!',
+              } as any,
+            })}
+            className="w-5 h-5"
+          />
+          <span className="font-semibold">환영 메시지 활성화</span>
+        </label>
+        {localConfig.welcomeMessage?.enabled && (
+          <div className="ml-7 space-y-2">
+            <input
+              type="text"
+              value={localConfig.welcomeMessage.text || ''}
+              onChange={(e) => setLocalConfig({
+                ...localConfig,
+                welcomeMessage: {
+                  ...localConfig.welcomeMessage,
+                  text: e.target.value,
+                } as any,
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="{name}님 환영합니다!"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 새 메뉴 항목 추가 버튼 */}
+      <div>
+        <button
+          onClick={addMenuItem}
+          className="w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-500 hover:text-blue-600"
+        >
+          + 새 메뉴 항목 추가
+        </button>
+      </div>
+
       <div className="space-y-4 max-h-[600px] overflow-y-auto">
         {localConfig.menuItems
           .sort((a, b) => a.order - b.order)
