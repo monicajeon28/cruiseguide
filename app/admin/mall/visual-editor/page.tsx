@@ -5368,6 +5368,123 @@ function FooterEditor({
     </div>
   );
 }
+// 메인몰 전역 설정 편집기
+function GlobalSettingsEditor({
+  config,
+  onUpdate,
+  onClose,
+}: {
+  config: PageConfig['globalSettings'];
+  onUpdate: (config: PageConfig['globalSettings']) => void;
+  onClose: () => void;
+}) {
+  const [localConfig, setLocalConfig] = useState(config);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [showGallery, setShowGallery] = useState<{ type: 'image' | 'emoji'; bannerType?: string } | null>(null);
+
+  // 체크 표시 이모티콘 옵션
+  const checkmarkIcons = [
+    { value: '✓', label: '체크 표시' },
+    { value: '✅', label: '체크 마크' },
+    { value: '✔', label: '체크' },
+    { value: '⭐', label: '별' },
+    { value: '❤️', label: '하트' },
+    { value: '💚', label: '초록 하트' },
+    { value: '💙', label: '파란 하트' },
+    { value: '💛', label: '노란 하트' },
+    { value: '💜', label: '보라 하트' },
+    { value: '🔵', label: '파란 원' },
+    { value: '🟢', label: '초록 원' },
+    { value: '🟡', label: '노란 원' },
+    { value: '🟣', label: '보라 원' },
+    { value: '🔴', label: '빨간 원' },
+    { value: '⚫', label: '검은 원' },
+  ];
+
+  // 이미지 업로드 핸들러
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, bannerType: 'heroBanner' | 'promotionBanner' | 'categoryBanner') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(bannerType);
+    try {
+      // 여기에 이미지 업로드 로직 추가
+      // 임시로 파일 URL 사용
+      const imageUrl = URL.createObjectURL(file);
+      setLocalConfig({
+        ...localConfig,
+        banners: {
+          ...localConfig.banners,
+          [bannerType]: imageUrl,
+        },
+      });
+    } catch (error) {
+      console.error('Image upload failed:', error);
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold">메인몰 전역 설정</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <FiX size={20} />
+        </button>
+      </div>
+
+      {/* 배너 이미지 설정 */}
+      <div className="border-t pt-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-3">배너 이미지 설정</h4>
+        
+        {/* 히어로 배너 */}
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            히어로 배너 이미지
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload(e, 'heroBanner')}
+              className="hidden"
+              id="hero-banner-upload"
+              disabled={uploading === 'heroBanner'}
+            />
+            <label
+              htmlFor="hero-banner-upload"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer text-center text-sm"
+            >
+              {uploading === 'heroBanner' ? '업로드 중...' : '이미지 업로드'}
+            </label>
+            <button
+              onClick={() => setShowGallery({ type: 'image', bannerType: 'heroBanner' })}
+              className="flex-1 px-4 py-2 border border-blue-300 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-center text-sm flex items-center justify-center gap-2"
+            >
+              <FiFolder size={16} />
+              이미지 불러오기
+            </button>
+            {localConfig.banners.heroBanner && (
+              <div className="flex-1">
+                <img src={localConfig.banners.heroBanner} alt="히어로 배너" className="max-h-20 object-contain" />
+                <button
+                  onClick={() => setLocalConfig({
+                    ...localConfig,
+                    banners: { ...localConfig.banners, heroBanner: '' },
+                  })}
+                  className="text-xs text-red-600 mt-1"
+                >
+                  제거
+                </button>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            • 메인 페이지 상단에 표시될 히어로 배너 이미지를 업로드하거나 저장된 이미지를 불러올 수 있습니다.
+          </p>
+        </div>
+
         {/* 프로모션 배너 */}
         <div className="mb-4">
           <label className="block text-sm font-semibold text-gray-700 mb-1">
