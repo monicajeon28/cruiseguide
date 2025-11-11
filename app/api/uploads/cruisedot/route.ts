@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 const MEDIA_ROOT = path.join(process.cwd(), "public", "크루즈정보사진");
 const ALLOWED_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif"]);
 
