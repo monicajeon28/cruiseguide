@@ -132,55 +132,136 @@ KAKAO_CHANNEL_BOT_ID=your-bot-id
 
 ---
 
-## 4단계: 데이터베이스 설정 (중요!)
+## 4단계: Vercel Postgres 데이터베이스 설정 (중요!) ⭐ 추천 방법
 
 ### ⚠️ 문제: SQLite는 Vercel에서 작동하지 않습니다
 
 현재 프로젝트는 SQLite를 사용하고 있는데, Vercel은 **읽기 전용 파일 시스템**을 사용하므로 SQLite를 사용할 수 없습니다.
 
-### 해결 방법: PostgreSQL로 변경
+### ✅ 해결 방법: Vercel Postgres 사용 (가장 쉬운 방법!)
 
-Vercel에서는 **Vercel Postgres** 또는 외부 PostgreSQL 서비스를 사용해야 합니다.
+Vercel Postgres를 사용하면 자동으로 환경 변수가 설정되고, 별도 설정이 거의 필요 없습니다.
 
-#### 옵션 1: Vercel Postgres 사용 (추천)
+---
 
-1. Vercel 대시보드에서 프로젝트 선택
-2. **Storage** 탭 클릭
-3. **Create Database** → **Postgres** 선택
-4. 데이터베이스 이름 입력 후 **Create** 클릭
-5. 자동으로 `DATABASE_URL` 환경 변수가 추가됩니다!
+### 4-1. Vercel Postgres 데이터베이스 생성하기
 
-#### 옵션 2: 외부 PostgreSQL 사용
+**단계별 가이드:**
+
+1. **Vercel 대시보드 접속**
+   - https://vercel.com/dashboard 접속
+   - 로그인 (GitHub 계정으로 로그인)
+
+2. **프로젝트 선택**
+   - 배포한 프로젝트를 클릭 (아직 배포 안 했다면 3단계 먼저 진행)
+
+3. **Storage 탭 클릭**
+   - 프로젝트 페이지 상단에 있는 탭 중 **"Storage"** 클릭
+   - 왼쪽 사이드바에 있을 수도 있습니다
+
+4. **데이터베이스 생성**
+   - **"Create Database"** 버튼 클릭
+   - 또는 **"Add"** → **"Database"** 클릭
+   - **"Postgres"** 선택
+   - 데이터베이스 이름 입력 (예: `cruise-guide-db`)
+   - **"Create"** 버튼 클릭
+
+5. **완료!**
+   - 데이터베이스가 생성되면 자동으로 `DATABASE_URL` 환경 변수가 추가됩니다!
+   - 별도로 환경 변수를 추가할 필요가 없습니다 ✨
+
+---
+
+### 4-2. Prisma 스키마 변경하기
+
+**✅ 이미 완료되었습니다!** 
+
+프로젝트의 `prisma/schema.prisma` 파일이 이미 PostgreSQL로 변경되었습니다:
+
+```prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+```
+
+---
+
+### 4-3. 데이터베이스 마이그레이션 실행하기
+
+Vercel Postgres를 생성한 후, 데이터베이스 스키마를 적용해야 합니다.
+
+#### 방법 1: Vercel 대시보드에서 실행 (추천)
+
+1. Vercel 프로젝트 페이지에서 **"Deployments"** 탭 클릭
+2. 최신 배포를 클릭
+3. **"Redeploy"** 버튼 클릭
+4. 배포가 완료되면 자동으로 Prisma 마이그레이션이 실행됩니다
+
+#### 방법 2: 로컬에서 실행 (고급)
+
+로컬에서 직접 마이그레이션을 실행하려면:
+
+1. **Vercel에서 DATABASE_URL 복사**
+   - 프로젝트 → **Settings** → **Environment Variables**
+   - `DATABASE_URL` 값을 복사
+
+2. **로컬 .env 파일에 추가**
+   ```bash
+   # .env.local 파일 생성 또는 수정
+   DATABASE_URL="복사한_데이터베이스_URL"
+   ```
+
+3. **마이그레이션 실행**
+   ```bash
+   cd /home/userhyeseon28/projects/cruise-guide
+   npx prisma migrate deploy
+   # 또는
+   npx prisma db push
+   ```
+
+**참고:** `prisma migrate deploy`는 프로덕션 환경용, `prisma db push`는 개발용입니다.
+
+---
+
+### 4-4. 환경 변수 확인하기
+
+데이터베이스 생성 후, 다음 환경 변수들이 자동으로 추가되었는지 확인하세요:
+
+- ✅ `POSTGRES_URL` - PostgreSQL 연결 URL
+- ✅ `POSTGRES_PRISMA_URL` - Prisma용 연결 URL
+- ✅ `POSTGRES_URL_NON_POOLING` - 직접 연결용 URL
+- ✅ `DATABASE_URL` - 일반적인 데이터베이스 연결 URL (Prisma가 사용)
+
+**확인 방법:**
+1. 프로젝트 → **Settings** → **Environment Variables**
+2. 위의 변수들이 있는지 확인
+
+---
+
+### 4-5. 데이터베이스 연결 테스트하기
+
+배포 후 데이터베이스가 제대로 연결되었는지 확인:
+
+1. 배포된 사이트 접속
+2. 사이트가 정상적으로 작동하는지 확인
+3. Vercel 대시보드 → **Storage** → 데이터베이스 클릭
+4. **"Table Editor"** 또는 **"SQL Editor"**에서 테이블 확인
+
+---
+
+## 📝 참고: 다른 PostgreSQL 옵션들
+
+Vercel Postgres 대신 외부 서비스를 사용하고 싶다면:
 
 - **Supabase** (무료): https://supabase.com
-- **Neon** (무료): https://neon.tech
+- **Neon** (무료): https://neon.tech  
 - **Railway** (무료): https://railway.app
 
 외부 서비스를 사용하면:
 1. PostgreSQL 데이터베이스 생성
 2. 연결 URL 복사
-3. Vercel 환경 변수에 `DATABASE_URL`로 추가
-
-### 4-1. Prisma 스키마 변경
-
-PostgreSQL을 사용하려면 `prisma/schema.prisma` 파일을 수정해야 합니다:
-
-```prisma
-datasource db {
-  provider = "postgresql"  // sqlite에서 변경
-  url      = env("DATABASE_URL")
-}
-```
-
-### 4-2. 데이터베이스 마이그레이션
-
-로컬에서 마이그레이션 실행:
-
-```bash
-npx prisma migrate deploy
-# 또는
-npx prisma db push
-```
+3. Vercel 환경 변수에 `DATABASE_URL`로 수동 추가
 
 ---
 
